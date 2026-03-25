@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import useSWRMutation from "swr/mutation";
-
+import Link from "next/link";
 import { rpc } from "@/lib/rpc";
-
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +34,17 @@ async function loginFetcher(
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isRegistered = searchParams.get("registered") === "true";
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -71,13 +80,19 @@ export default function LoginPage() {
     <div className="min-h-screen bg-linear-to-b from-zinc-950 via-zinc-950 to-zinc-900 flex flex-col items-center justify-center p-6">
       <MouseGlow />
 
+      {isRegistered && (
+        <div className="mb-6 w-full max-w-md rounded-md bg-emerald-950/40 border border-emerald-800/50 p-4 text-center text-sm text-emerald-400 animate-in fade-in slide-in-from-top-4 duration-500">
+          Account created successfully! You can now sign in.
+        </div>
+      )}
+
       <div className="mb-10 flex flex-col items-center">
-        <div className="relative w-76 h-44 mb-[-25px]">
+        <div className="relative w-80 h-44 mb-2">
           <Image
-            src="/nextplay_logo.png"
+            src="/23_coffee.png"
             alt="Next Play Live"
             fill
-            className="object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.2)] brightness-110 contrast-110"
+            className="object-contain drop-shadow-[0_0_15px_rgba(160,90,50,0.4)] brightness-110 contrast-110"
             priority
           />
         </div>
@@ -148,16 +163,25 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-8 text-center">
+          <div className="mt-8 text-center space-y-4">
+            <p className="text-sm text-zinc-400">
+              Don&apos;t have an account?{" "}
+              <Link href="/register" className="text-primary hover:underline">
+                Sign Up
+              </Link>
+            </p>
+
             <Button
               variant="ghost"
               size="sm"
+              asChild
               className="text-primary-foreground hover:text-zinc-200 hover:bg-zinc-800/40"
-              onClick={() => router.push("/")}
               disabled={isMutating}
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
+              <Link href="/">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Home
+              </Link>
             </Button>
           </div>
         </CardContent>

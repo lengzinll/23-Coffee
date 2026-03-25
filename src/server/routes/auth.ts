@@ -11,6 +11,40 @@ import argon2 from "argon2";
 
 const authApp = new Hono({ strict: false })
   .post(
+    "/register",
+    zValidator(
+      "json",
+      z.object({
+        username: z.string().min(3).max(32),
+        password: z.string().min(6),
+      }),
+    ),
+    async (c) => {
+      const { username, password } = c.req.valid("json");
+
+      // Check if username already exists
+      const existing = await db
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.username, username))
+        .get();
+
+      if (existing) {
+        return c.json({ success: false, message: "Username already taken" }, 409);
+      }
+
+      const hashed = await argon2.hash(password);
+
+      await db.insert(user).values({
+        username,
+        password: hashed,
+        role: "user",
+      });
+
+      return c.json({ success: true, message: "Success" }, 201);
+    },
+  )
+  .post(
     "/login",
     zValidator(
       "json",
@@ -22,20 +56,21 @@ const authApp = new Hono({ strict: false })
     async (c) => {
       const { username, password } = c.req.valid("json");
 
-      const adminUser = await db
+      const _user = await db
         .select()
         .from(user)
         .where(eq(user.username, username))
         .get();
 
-      if (!adminUser || !(await argon2.verify(adminUser.password, password))) {
+      if (!_user || !(await argon2.verify(_user.password, password))) {
         return c.json({ success: false, message: "Invalid credentials" }, 401);
       }
 
       // Payload for JWT Auth
       const payload = {
-        username: adminUser.username,
-        role: adminUser.role,
+        id: _user.id,
+        username: _user.username,
+        role: _user.role,
         exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24, // 24 hours
       };
 
@@ -51,6 +86,13 @@ const authApp = new Hono({ strict: false })
       return c.json({ success: true, message: "Logged in successfully" });
     },
   )
+  .get("/me", async (c) => {
+    const payload = c.get("jwtPayload") as { id: number; username: string; role: string } | undefined;
+    if (!payload) {
+      return c.json({ success: false, message: "Not logged in" }, 401);
+    }
+    return c.json({ success: true, user: payload });
+  })
   .post("/logout", async (c) => {
     setCookie(c, "auth_token", "", {
       path: "/",

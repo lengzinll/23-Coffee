@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type ApiUser } from "@/lib/types";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import {
@@ -110,8 +110,8 @@ export default function UsersPage() {
                       className="text-zinc-400"
                       suppressHydrationWarning
                     >
-                      {u.createdAt
-                        ? new Date(u.createdAt).toLocaleDateString()
+                      {u.timestamp
+                        ? new Date(u.timestamp).toLocaleString()
                         : "—"}
                     </TableCell>
                   </TableRow>

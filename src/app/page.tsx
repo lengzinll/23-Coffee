@@ -10,17 +10,17 @@ import {
 import { ClipboardList, QrCode, ShieldCheck, Users } from "lucide-react";
 import { MouseGlow } from "@/components/mouse-glow";
 import { db } from "@/db";
-import { register } from "@/db/schema";
+import { scanHistory } from "@/db/schema";
 import { sql } from "drizzle-orm";
 import { CountUp } from "@/components/count-up";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-async function getTotalRegistrations(): Promise<number> {
+async function getTotalScans(): Promise<number> {
   try {
     const result = await db
       .select({ count: sql<number>`count(*)` })
-      .from(register)
+      .from(scanHistory)
       .get();
     return result?.count ?? 0;
   } catch {
@@ -29,19 +29,19 @@ async function getTotalRegistrations(): Promise<number> {
 }
 
 export default async function Home() {
-  const totalRegistrations = await getTotalRegistrations();
+  const totalScans = await getTotalScans();
 
   return (
     <div className="relative min-h-screen  text-primary-foreground flex flex-col items-center justify-center p-4 overflow-hidden">
       <MouseGlow />
       <div className="relative z-10 w-full max-w-4xl space-y-8 text-center">
         <div className="space-y-6 flex flex-col items-center">
-          <div className="relative mb-[-30px] w-[340px] h-[180px] sm:w-[600px] sm:h-[300px] animate-in fade-in zoom-in duration-1000">
+          <div className="relative mb-2 w-[340px] h-[180px] sm:w-[500px] sm:h-[250px] animate-in fade-in zoom-in duration-1000">
             <Image
-              src="/nextplay_logo.png"
+              src="/23_coffee.png"
               alt="Next Play Live"
               fill
-              className="object-contain drop-shadow-[0_0_25px_rgba(255,8,8,0.3)] brightness-110 contrast-110"
+              className="object-contain drop-shadow-[0_0_25px_rgba(160,90,50,0.4)] brightness-110 contrast-110"
               priority
             />
           </div>
@@ -59,10 +59,10 @@ export default async function Home() {
               <Users className="w-5 h-5" />
             </div>
             <span className="text-zinc-400 text-sm font-medium">
-              ចំនួនអ្នកចុះឈ្មោះសរុប
+              ចំនួនការស្កេនសរុប (Total Scans)
             </span>
             <span className="text-2xl font-bold text-white tabular-nums">
-              <CountUp target={totalRegistrations} />
+              <CountUp target={totalScans} />
             </span>
           </div>
         </div>
@@ -103,7 +103,15 @@ export default async function Home() {
             size="lg"
             className="bg-primary hover:bg-primary/90 text-white px-8 py-6 text-lg rounded-full transition-all hover:scale-105"
           >
-            <Link href="/form">ចុះឈ្មោះចូលរួម</Link>
+            <Link href="/register">ចុះឈ្មោះចូលរួម</Link>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            size="lg"
+            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 px-8 py-6 text-lg rounded-full transition-all hover:scale-105"
+          >
+            <Link href="/login">ចូលគណនី</Link>
           </Button>
         </div>
       </div>

@@ -11,6 +11,7 @@ type PublicPath = {
 
 const publicPaths: PublicPath[] = [
   { path: "/api/auth/login", method: "POST", exact: true },
+  { path: "/api/auth/register", method: "POST", exact: true },
   { path: "/api/register", method: "POST", exact: true },
   { path: "/api/register/", method: "GET", exact: false },
   { path: "/api/register/count", method: "GET", exact: true },

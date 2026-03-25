@@ -1,141 +1,189 @@
 "use client";
 
 import useSWR from "swr";
-import { rpc } from "@/lib/rpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Users,
-  ClipboardList,
-  CheckCircle2,
-  Calendar,
-  Loader2,
-} from "lucide-react";
-import { type RegistrationWithEvent } from "@/lib/types";
+import { Users, QrCode, Clock, CheckCircle, Activity, Coffee } from "lucide-react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
-import ScoreTable from "./_component/score_table";
+import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useState, useMemo } from "react";
+import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
+import { type DateRange } from "react-day-picker";
+
+const fetchStats = async (url: string) => {
+  // Extract query params from SWR url
+  const searchParams = new URL(url, window.location.origin).search;
+
+  const res = await fetch(`/api/stats${searchParams}`);
+  if (!res.ok) throw new Error("Failed to fetch stats");
+  const result = (await res.json()) as any;
+  if (!result.success) throw new Error(result.error || "Unknown error");
+  return result.data;
+};
+
+const defaultValue = {
+  from: new Date(),
+  to: new Date(),
+}
 
 export default function DashboardOverview() {
-  const {
-    data: regsData,
-    error: regsError,
-    isLoading: regsLoading,
-  } = useSWR("/api/register", async () => {
-    const res = await rpc.register.$get();
-    if (!res.ok) throw new Error(res.statusText);
-    return (await res.json()).data;
-  });
+  const [date, setDate] = useState<DateRange | undefined>(defaultValue);
 
-  const {
-    data: usersData,
-    error: usersError,
-    isLoading: usersLoading,
-  } = useSWR("/api/user", async () => {
-    const res = await rpc.user.$get();
-    if (!res.ok) throw new Error(res.statusText);
-    return (await res.json()).data;
-  });
+  const swrUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (date?.from) params.append("startDate", date.from.toISOString());
+    if (date?.to) params.append("endDate", date.to.toISOString());
+    return `/api/stats?${params.toString()}`;
+  }, [date]);
 
-  const {
-    data: eventsData,
-    error: eventsError,
-    isLoading: eventsLoading,
-  } = useSWR("/api/event", async () => {
-    const res = await rpc.event.$get();
-    if (!res.ok) throw new Error(res.statusText);
-    return (await res.json()).data;
-  });
+  const { data, error, isLoading } = useSWR(swrUrl, fetchStats);
 
-  const totalRegs = regsData?.length || 0;
-  const verifiedRegs =
-    regsData?.filter((r: RegistrationWithEvent) => r.scanned)?.length ?? 0;
-  const totalUsers = usersData?.length || 0;
-  const totalEvents = eventsData?.length || 0;
-
-  if (regsError)
-    return <div className="text-destructive">{regsError.message}</div>;
-  if (usersError)
-    return <div className="text-destructive">{usersError.message}</div>;
-  if (eventsError)
-    return <div className="text-destructive">{eventsError.message}</div>;
-  if (regsLoading || usersLoading || eventsLoading) {
-    return <LoadingScreen message="Loading overview..." />;
+  if (error) {
+    return (
+      <div className="p-6 text-red-500">
+        Error loading dashboard: {error.message}
+      </div>
+    );
   }
 
+  if (isLoading || !data) {
+    return <LoadingScreen message="Loading overview metrics..." />;
+  }
+
+  const { totalUsers, scans, recentActivity } = data;
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-primary">Dashboard Overview</h1>
+    <div className="space-y-8 pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-primary">Overview</h1>
+          <p className="text-sm text-zinc-400 mt-1">
+            A summary of your platform&apos;s activity and engagement.
+          </p>
+        </div>
+
+        {/* Date Range Picker */}
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 bg-zinc-900/50 p-2 border border-zinc-800 rounded-xl">
+          <DatePickerWithRange date={date} setDate={setDate} />
+          {date && (
+            <button
+              onClick={() => setDate(defaultValue)}
+              className="text-[10px] uppercase font-bold text-zinc-500 hover:text-primary transition-colors pr-2 pb-1 sm:pb-0"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Registrations
-            </CardTitle>
-            <ClipboardList className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-zinc-100">{totalRegs}</div>
-            <p className="text-xs text-zinc-500 mt-1">
-              Users signed up for challenge
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        {/* Total Users */}
+        <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-zinc-400">
-              Verified On-Site
+              Total Users
             </CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-zinc-100">
-              {verifiedRegs}
-            </div>
-            <p className="text-xs text-zinc-500 mt-1">
-              {totalRegs > 0 ? Math.round((verifiedRegs / totalRegs) * 100) : 0}
-              % of all registrations
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-400">
-              System Admins
-            </CardTitle>
-            <Users className="h-4 w-4 text-primary" />
+            <Users className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-zinc-100">{totalUsers}</div>
-            <p className="text-xs text-zinc-500 mt-1">
-              Users with dashboard access
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        {/* Total Stamps */}
+        <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-zinc-400">
-              Total Events
+              Total Stamps
             </CardTitle>
-            <Calendar className="h-4 w-4 text-primary" />
+            <QrCode className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-zinc-100">
-              {totalEvents}
-            </div>
-            <p className="text-xs text-zinc-500 mt-1">
-              Active and upcoming events
-            </p>
+            <div className="text-2xl font-bold text-zinc-100">{scans.total}</div>
+          </CardContent>
+        </Card>
+
+        {/* Approved Scans / Coffees Earned */}
+        <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-zinc-400">
+              Approved
+            </CardTitle>
+            <CheckCircle className="w-4 h-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-zinc-100">{scans.approved}</div>
+          </CardContent>
+        </Card>
+
+        {/* Pending Scans */}
+        <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-zinc-400">
+              Pending
+            </CardTitle>
+            <Clock className="w-4 h-4 text-yellow-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-zinc-100">{scans.pending}</div>
           </CardContent>
         </Card>
       </div>
 
-
-      <ScoreTable />
-
-
+      {/* Recent Activity */}
+      <h2 className="text-xl font-bold text-zinc-100 mt-8 mb-4 flex items-center gap-2">
+        <Activity className="w-5 h-5 text-primary" />
+        Recent Activity
+      </h2>
+      <div className="grid gap-4 md:grid-cols-1">
+        <Card className="bg-zinc-900 border-zinc-800 shadow-sm col-span-1">
+          <CardContent className="p-0">
+            {recentActivity.length > 0 ? (
+              <div className="divide-y divide-zinc-800">
+                {recentActivity.map((activity: any) => (
+                  <div
+                    key={activity.id}
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                        <Coffee className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-zinc-100">
+                          {activity.username || "Guest User"}
+                        </p>
+                        <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3" />
+                          {activity.timestamp ? formatDate(activity.timestamp) : "Recently"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 sm:mt-0 flex items-center gap-2">
+                      <Badge
+                        className={cn(
+                          "capitalize px-2.5 py-0.5",
+                          activity.status === "approved" && "bg-emerald-500/20 text-emerald-500 border-emerald-500/30",
+                          activity.status === "pending" && "bg-yellow-500/20 text-yellow-500 border-yellow-500/30",
+                          activity.status === "rejected" && "bg-red-500/20 text-red-500 border-red-500/30",
+                        )}
+                        variant="outline"
+                      >
+                        {activity.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-zinc-500">
+                No recent activity found.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -34,7 +34,7 @@ export function MouseGlow() {
             aria-hidden
             className="pointer-events-none fixed top-0 left-0 z-0 w-[600px] h-[600px] will-change-transform"
             style={{
-                background: "radial-gradient(circle, rgba(250, 38, 38, 0.07) 0%, rgba(255, 49, 49, 0.03) 20%, transparent 70%)",
+                background: "radial-gradient(circle, rgba(160, 90, 50, 0.07) 0%, rgba(160, 90, 50, 0.03) 20%, transparent 70%)",
                 transform: "translate(-9999px, -9999px)",
             }}
         />

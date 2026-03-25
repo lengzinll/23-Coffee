@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "45d8b766-4733-46a1-8a79-7d5e13a5db8a",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "15f630fa-3f4d-4474-8092-5c1a2a2c7c65",
+  "prevId": "45d8b766-4733-46a1-8a79-7d5e13a5db8a",
   "tables": {
     "challenge": {
       "name": "challenge",
@@ -355,6 +355,71 @@
           "tableTo": "event",
           "columnsFrom": [
             "event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "scan_history": {
+      "name": "scan_history",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "register_id": {
+          "name": "register_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "scan_history_user_id_user_id_fk": {
+          "name": "scan_history_user_id_user_id_fk",
+          "tableFrom": "scan_history",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "scan_history_register_id_register_id_fk": {
+          "name": "scan_history_register_id_register_id_fk",
+          "tableFrom": "scan_history",
+          "tableTo": "register",
+          "columnsFrom": [
+            "register_id"
           ],
           "columnsTo": [
             "id"
