@@ -4,7 +4,17 @@ import useSWR from "swr";
 import { rpc } from "@/lib/rpc";
 import { type ApiScanWithUser, type ApiScan, type ApiUser } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { Clock, User as UserIcon, Search, Filter, ChevronDown, ChevronRight, Gift, CheckCircle2, Coffee } from "lucide-react";
+import {
+  Clock,
+  User as UserIcon,
+  Search,
+  Filter,
+  ChevronDown,
+  ChevronRight,
+  Gift,
+  CheckCircle2,
+  Coffee,
+} from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,9 +26,18 @@ import {
 } from "@/components/ui/select";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { cn, formatDate } from "@/lib/utils";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -38,6 +57,13 @@ const fetcher = async (): Promise<ApiScanWithUser[]> => {
   return result.data;
 };
 
+const usersFetcher = async (): Promise<ApiUser[]> => {
+  const res = await rpc.user.$get();
+  if (!res.ok) throw new Error("Failed to fetch users");
+  const result = await res.json();
+  return result.data;
+};
+
 const meFetcher = async () => {
   const res = await rpc.auth.me.$get();
   if (!res.ok) return null;
@@ -45,7 +71,12 @@ const meFetcher = async () => {
   return result.success ? result.user : null;
 };
 
-const STAMPS_PER_CYCLE = 6;
+const settingsFetcher = async () => {
+  const res = await rpc.settings.$get();
+  if (!res.ok) throw new Error("Failed to fetch settings");
+  const result = await res.json();
+  return result.data;
+};
 
 type GroupedScan = {
   user: ApiUser | null;
@@ -53,19 +84,31 @@ type GroupedScan = {
 };
 
 export default function ScansPage() {
-
-  const { data, isLoading, error, mutate } = useSWR("/api/scan", fetcher);
   const { data: currentUser } = useSWR("/api/auth/me", meFetcher);
+  const { data, isLoading, error, mutate } = useSWR("/api/scan", fetcher);
+  const {
+    data: usersData,
+    isLoading: isUsersLoading,
+    error: usersError,
+  } = useSWR(currentUser?.role === "admin" ? "/api/user" : null, usersFetcher);
+  const { data: settingsData, isLoading: isSettingsLoading, error: settingsError } = useSWR("/api/settings", settingsFetcher);
+
+  const STAMPS_PER_CYCLE = settingsData?.STAMPS_PER_CYCLE ? parseInt(settingsData.STAMPS_PER_CYCLE, 10) : 6;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [expandedUsers, setExpandedUsers] = useState<Record<number, boolean>>({});
+  const [expandedUsers, setExpandedUsers] = useState<Record<number, boolean>>(
+    {},
+  );
   const [mounted, setMounted] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
 
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedUserForScan, setSelectedUserForScan] = useState<{ id: number, username: string } | null>(null);
+  const [selectedUserForScan, setSelectedUserForScan] = useState<{
+    id: number;
+    username: string;
+  } | null>(null);
 
   const handleManualAddClick = (userId: number, username: string) => {
     setSelectedUserForScan({ id: userId, username });
@@ -78,7 +121,7 @@ export default function ScansPage() {
     setIsAdding(true);
     try {
       const res = await rpc.scan.$post({
-        json: { userId: selectedUserForScan.id }
+        json: { userId: selectedUserForScan.id },
       });
 
       const result = await res.json();
@@ -86,7 +129,8 @@ export default function ScansPage() {
         toast.success(`Stamp added for ${selectedUserForScan.username}`);
         mutate(); // Refresh the list
       } else {
-        const errorMsg = result.success === false ? result.message : "Failed to add stamp";
+        const errorMsg =
+          result.success === false ? result.message : "Failed to add stamp";
         toast.error(errorMsg);
       }
     } catch (err) {
@@ -104,16 +148,34 @@ export default function ScansPage() {
   }, []);
 
   const onOpenChange = (userId: number, open: boolean) => {
-    setExpandedUsers(prev => ({ ...prev, [userId]: open }));
+    setExpandedUsers((prev) => ({ ...prev, [userId]: open }));
   };
 
   const groupedData = useMemo(() => {
-    if (!data) return [];
+    if (!data || !currentUser) return [];
 
-    // Group by user
     const groups: Record<number, GroupedScan> = {};
 
+    if (currentUser.role === "admin") {
+      if (!usersData) return [];
+      usersData.forEach((user) => {
+        if (user.role === "user") {
+          groups[user.id] = {
+            user,
+            scans: [],
+          };
+        }
+      });
+    } else {
+      groups[currentUser.id] = {
+        user: currentUser as unknown as ApiUser,
+        scans: [],
+      };
+    }
+
     data.forEach((item) => {
+      if (item.user && item.user.role !== "user") return;
+
       const userId = item.scan_history.user_id || 0;
       if (!groups[userId]) {
         groups[userId] = {
@@ -124,8 +186,7 @@ export default function ScansPage() {
       groups[userId].scans.push(item.scan_history);
     });
 
-    // Sort scans by timestamp descending (within each user)
-    Object.values(groups).forEach(group => {
+    Object.values(groups).forEach((group) => {
       group.scans.sort((a, b) => {
         const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -134,22 +195,52 @@ export default function ScansPage() {
     });
 
     // Filter by search and status
-    return Object.values(groups).filter((group) => {
+    const result = Object.values(groups).filter((group) => {
       const username = group.user?.username || "Unknown";
       const matchesSearch =
         !searchTerm ||
         username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        group.scans.some(s => s.status.toLowerCase().includes(searchTerm.toLowerCase()));
+        group.scans.some((s) =>
+          s.status.toLowerCase().includes(searchTerm.toLowerCase()),
+        );
 
       const matchesStatus =
-        selectedStatus === "all" || group.scans.some(s => s.status === selectedStatus);
+        selectedStatus === "all" ||
+        group.scans.some((s) => s.status === selectedStatus);
 
       return matchesSearch && matchesStatus;
     });
-  }, [data, searchTerm, selectedStatus]);
 
-  if (error) return <div className="p-6 text-destructive">Error: {error.message}</div>;
-  if (isLoading) return <LoadingScreen message="Fetching stamp history..." />;
+    // Sort by latest scan first, then by user creation time descending
+    result.sort((a, b) => {
+      const latestScanA = a.scans[0]?.timestamp
+        ? new Date(a.scans[0].timestamp).getTime()
+        : 0;
+      const latestScanB = b.scans[0]?.timestamp
+        ? new Date(b.scans[0].timestamp).getTime()
+        : 0;
+      if (latestScanA !== latestScanB) return latestScanB - latestScanA;
+
+      const userA = a.user?.timestamp
+        ? new Date(a.user.timestamp).getTime()
+        : 0;
+      const userB = b.user?.timestamp
+        ? new Date(b.user.timestamp).getTime()
+        : 0;
+      return userB - userA;
+    });
+
+    return result;
+  }, [data, usersData, currentUser, searchTerm, selectedStatus]);
+
+  if (error || usersError || settingsError)
+    return (
+      <div className="p-6 text-destructive">
+        Error: {error?.message || usersError?.message || settingsError?.message}
+      </div>
+    );
+  if (isLoading || isUsersLoading || isSettingsLoading)
+    return <LoadingScreen message="Fetching stamp history..." />;
   if (!mounted) return null;
 
   return (
@@ -161,7 +252,7 @@ export default function ScansPage() {
             Track customer progress. {STAMPS_PER_CYCLE} stamps = 1 free coffee.
           </p>
         </div>
-        <div className="flex items-center gap-4 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <Input
@@ -171,10 +262,10 @@ export default function ScansPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-2 bg-zinc-950/50 border border-zinc-800 rounded-lg p-1.5 pr-2">
+          <div className="flex items-center gap-2 bg-zinc-950/50 border border-zinc-800 rounded-lg p-1.5 pr-2 w-full sm:w-auto">
             <Filter className="h-3.5 w-3.5 text-zinc-500 ml-1" />
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="h-7 border-none bg-transparent p-1 focus:ring-0 text-xs font-medium text-zinc-200 min-w-[100px]">
+              <SelectTrigger className="h-7 border-none bg-transparent p-1 focus:ring-0 text-xs font-medium text-zinc-200 min-w-[100px] w-full">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200">
@@ -192,7 +283,9 @@ export default function ScansPage() {
         {groupedData.length === 0 ? (
           <div className="text-center py-20 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-2xl">
             <UserIcon className="h-10 w-10 text-zinc-600 mx-auto mb-3" />
-            <p className="text-zinc-500">No customers found matching your criteria.</p>
+            <p className="text-zinc-500">
+              No customers found matching your criteria.
+            </p>
           </div>
         ) : (
           groupedData.map((group, index) => {
@@ -211,51 +304,68 @@ export default function ScansPage() {
               >
                 <Card className="bg-zinc-900 gap-0 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-colors p-0!">
                   <CollapsibleTrigger asChild>
-                    <CardHeader
-                      className="cursor-pointer select-none py-2 px-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 grid-rows-none auto-rows-auto"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-primary font-bold">{index + 1}.</span>
+                    <CardHeader className="cursor-pointer select-none py-3 px-4 flex flex-row justify-between items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-primary font-bold hidden sm:inline">
+                          {index + 1}.
+                        </span>
                         <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
                           <UserIcon className="h-5 w-5 text-primary" />
                         </div>
                         <div className="min-w-0">
-                          <CardTitle className="text-base font-bold text-zinc-100 truncate">{group.user?.username || "Guest User"}</CardTitle>
+                          <CardTitle className="text-base font-bold text-zinc-100 truncate">
+                            {group.user?.username || "Guest User"}
+                          </CardTitle>
                           <CardDescription className="flex items-center gap-2">
                             <span className="flex items-center gap-1 text-[11px] text-zinc-500">
                               <Clock className="h-2.5 w-2.5" />
-                              {group.user?.timestamp ? formatDate(group.user.timestamp) : "Long ago"}
+                              {group.user?.timestamp
+                                ? formatDate(group.user.timestamp)
+                                : "Long ago"}
                             </span>
                           </CardDescription>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4 w-full sm:w-auto">
-                        <div className="flex flex-col items-end gap-1 flex-1 sm:flex-none">
+                      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                        <div className="flex flex-col items-end gap-1">
                           <div className="flex items-center gap-2">
                             {completedCycles > 0 && (
                               <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 font-bold text-[10px] h-5 py-0 px-1.5">
                                 <Gift className="h-2.5 w-2.5 mr-1" />
-                                {completedCycles} {completedCycles > 1 ? 'Coffees' : 'Coffee'}
+                                <span className="hidden xs:inline">
+                                  {completedCycles}{" "}
+                                  {completedCycles > 1 ? "Coffees" : "Coffee"}
+                                </span>
+                                <span className="xs:hidden">{completedCycles}</span>
                               </Badge>
                             )}
-                            <Badge variant="outline" className="bg-zinc-950/50 border-zinc-800 text-zinc-500 text-[10px] h-5 py-0 px-1.5 whitespace-nowrap">
+                            <Badge
+                              variant="outline"
+                              className="bg-zinc-950/50 border-zinc-800 text-zinc-500 text-[10px] h-5 py-0 px-1.5 whitespace-nowrap"
+                            >
                               Total: {totalScans}
                             </Badge>
                           </div>
-                          <div className="w-full sm:w-32 h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-1">
+                          <div className="w-20 sm:w-32 h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-1">
                             <div
                               className="h-full bg-primary transition-all duration-500"
-                              style={{ width: `${(currentCycleCount / STAMPS_PER_CYCLE) * 100}%` }}
+                              style={{
+                                width: `${(currentCycleCount / STAMPS_PER_CYCLE) * 100}%`,
+                              }}
                             />
                           </div>
                           <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold mt-0.5">
-                            Progress: {currentCycleCount}/{STAMPS_PER_CYCLE} next
+                            {currentCycleCount}/{STAMPS_PER_CYCLE} <span className="hidden xs:inline">next</span>
                           </span>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-600 shrink-0">
-                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </Button>
+                        <div className="h-8 w-8 flex items-center justify-center text-zinc-600">
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </div>
                       </div>
                     </CardHeader>
                   </CollapsibleTrigger>
@@ -263,82 +373,121 @@ export default function ScansPage() {
                   <CollapsibleContent className="border-t border-zinc-800/50 bg-black/10 p-3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
                     <div className="space-y-4">
                       {/* Group scans into cycles of STAMPS_PER_CYCLE */}
-                      {Array.from({ length: Math.max(1, Math.ceil((totalScans + 1) / STAMPS_PER_CYCLE)) }).reverse().map((_, cycleIndex, arr) => {
-                        const actualCycleIndex = arr.length - 1 - cycleIndex;
-                        const cycleScans = [...group.scans].reverse().slice(actualCycleIndex * STAMPS_PER_CYCLE, (actualCycleIndex + 1) * STAMPS_PER_CYCLE);
-                        const isCycleComplete = cycleScans.length === STAMPS_PER_CYCLE;
+                      {Array.from({
+                        length: Math.max(
+                          1,
+                          Math.ceil((totalScans + 1) / STAMPS_PER_CYCLE),
+                        ),
+                      })
+                        .reverse()
+                        .map((_, cycleIndex, arr) => {
+                          const actualCycleIndex = arr.length - 1 - cycleIndex;
+                          const cycleScans = [...group.scans]
+                            .reverse()
+                            .slice(
+                              actualCycleIndex * STAMPS_PER_CYCLE,
+                              (actualCycleIndex + 1) * STAMPS_PER_CYCLE,
+                            );
+                          const isCycleComplete =
+                            cycleScans.length === STAMPS_PER_CYCLE;
 
-                        return (
-                          <div key={actualCycleIndex} className="relative">
-                            <div className="flex items-center gap-3 mb-4">
-                              <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-tighter">
-                                Cycle #{actualCycleIndex + 1}
-                              </h4>
-                              {isCycleComplete && (
-                                <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  Reward Earned
-                                </div>
-                              )}
-                              <div className="flex-1 h-px bg-zinc-800" />
-                            </div>
-
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                              {/* Show STAMPS_PER_CYCLE slots per cycle */}
-                              {Array.from({ length: STAMPS_PER_CYCLE }).map((_, slotIndex) => {
-                                const scan = cycleScans[slotIndex];
-
-                                return (
-                                  <div
-                                    key={slotIndex}
-                                    onClick={!scan && currentUser?.role === 'admin' ? () => handleManualAddClick(userId, group.user?.username || "Guest") : undefined}
-                                    className={cn(
-                                      "aspect-square rounded-xl border flex flex-col items-center justify-center gap-2 transition-all p-2 relative group",
-                                      scan
-                                        ? "bg-zinc-800/50 border-zinc-700 shadow-lg shadow-black/20"
-                                        : "bg-transparent border-dashed border-zinc-800",
-                                      !scan && currentUser?.role === 'admin' && "cursor-pointer hover:border-primary/50 hover:bg-primary/5"
-                                    )}
-                                  >
-                                    {slotIndex === STAMPS_PER_CYCLE - 1 && (
-                                      <div className={cn(
-                                        "absolute top-4 right-4 transition-all duration-300 flex items-center gap-2",
-                                        scan ? "text-emerald-500 fill-emerald-500/20 animate-bounce" : "text-zinc-800"
-                                      )}>
-                                        <Badge>Free</Badge>
-                                      </div>
-                                    )}
-                                    {scan ? (
-                                      <>
-                                        <Badge
-                                          className={cn(
-                                            "capitalize",
-                                            scan.status === 'approved' && "bg-emerald-500 text-white",
-                                            scan.status === 'pending' && "bg-yellow-500 text-black",
-                                            scan.status === 'rejected' && "bg-red-500 text-white"
-                                          )}
-                                        >
-                                          {scan.status}
-                                        </Badge>
-                                        <span className="text-zinc-400 text-center leading-tight text-sm mt-1">
-                                          {scan.timestamp ? formatDate(scan.timestamp) : "-"}
-                                        </span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <div className="h-6 w-6 rounded-full border border-zinc-800 flex items-center justify-center">
-                                          <span className="text-xs text-zinc-700 font-bold">{slotIndex + 1}</span>
-                                        </div>
-                                        <span className="text-[10px] text-zinc-800 font-medium">Locked</span>
-                                      </>
-                                    )}
+                          return (
+                            <div key={actualCycleIndex} className="relative">
+                              <div className="flex items-center gap-3 mb-4">
+                                <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-tighter">
+                                  Cycle #{actualCycleIndex + 1}
+                                </h4>
+                                {isCycleComplete && (
+                                  <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Reward Earned
                                   </div>
-                                );
-                              })}
+                                )}
+                                <div className="flex-1 h-px bg-zinc-800" />
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                                {/* Show STAMPS_PER_CYCLE slots per cycle */}
+                                {Array.from({ length: STAMPS_PER_CYCLE }).map(
+                                  (_, slotIndex) => {
+                                    const scan = cycleScans[slotIndex];
+
+                                    return (
+                                      <div
+                                        key={slotIndex}
+                                        onClick={
+                                          !scan && currentUser?.role === "admin"
+                                            ? () =>
+                                                handleManualAddClick(
+                                                  userId,
+                                                  group.user?.username ||
+                                                    "Guest",
+                                                )
+                                            : undefined
+                                        }
+                                        className={cn(
+                                          "aspect-square rounded-xl border flex flex-col items-center justify-center gap-2 transition-all p-2 relative group",
+                                          scan
+                                            ? "bg-zinc-800/50 border-zinc-700 shadow-lg shadow-black/20"
+                                            : "bg-transparent border-dashed border-zinc-800",
+                                          !scan &&
+                                            currentUser?.role === "admin" &&
+                                            "cursor-pointer hover:border-primary/50 hover:bg-primary/5",
+                                        )}
+                                      >
+                                        {slotIndex === STAMPS_PER_CYCLE - 1 && (
+                                          <div
+                                            className={cn(
+                                              "absolute top-4 right-4 transition-all duration-300 flex items-center gap-2",
+                                              scan
+                                                ? "text-emerald-500 fill-emerald-500/20 animate-bounce"
+                                                : "text-zinc-800",
+                                            )}
+                                          >
+                                            <Badge>Free</Badge>
+                                          </div>
+                                        )}
+                                        {scan ? (
+                                          <>
+                                            <Badge
+                                              className={cn(
+                                                "capitalize",
+                                                scan.status === "approved" &&
+                                                  "bg-emerald-500 text-white",
+                                                scan.status === "pending" &&
+                                                  "bg-yellow-500 text-black",
+                                                scan.status === "rejected" &&
+                                                  "bg-red-500 text-white",
+                                              )}
+                                            >
+                                              {scan.status}
+                                            </Badge>
+                                            <span className="text-zinc-400 text-center leading-tight text-sm mt-1">
+                                              {scan.timestamp
+                                                ? formatDate(scan.timestamp)
+                                                : "-"}
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <div className="h-6 w-6 rounded-full border border-zinc-800 flex items-center justify-center">
+                                              <span className="text-xs text-zinc-700 font-bold">
+                                                {slotIndex + 1}
+                                              </span>
+                                            </div>
+                                            <span className="text-[10px] text-zinc-800 font-medium">
+                                              Locked
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
+                                    );
+                                  },
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   </CollapsibleContent>
                 </Card>
@@ -351,14 +500,22 @@ export default function ScansPage() {
       <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <AlertDialogContent className="bg-zinc-950 border-zinc-800">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-zinc-100 font-bold">Manual Stamp Entry</AlertDialogTitle>
+            <AlertDialogTitle className="text-zinc-100 font-bold">
+              Manual Stamp Entry
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-400">
-              Are you sure you want to manually add a stamp for <span className="font-bold text-primary">{selectedUserForScan?.username}</span>?
-              This action cannot be undone and will add progress to their coupon.
+              Are you sure you want to manually add a stamp for{" "}
+              <span className="font-bold text-primary">
+                {selectedUserForScan?.username}
+              </span>
+              ? This action cannot be undone and will add progress to their
+              coupon.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-100">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-100">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
@@ -372,7 +529,6 @@ export default function ScansPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 }

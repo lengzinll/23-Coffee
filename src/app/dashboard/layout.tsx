@@ -6,6 +6,8 @@ import {
   Users,
   ClipboardList,
   LogOut,
+  Settings,
+  Menu,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
@@ -21,6 +23,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 export default function DashboardLayout({
   children,
@@ -51,6 +60,7 @@ export default function DashboardLayout({
       roles: ["admin", "user"],
     },
     { href: "/dashboard/users", label: "System Users", icon: Users, roles: ["admin"] },
+    { href: "/dashboard/setting", label: "Settings", icon: Settings, roles: ["admin"] },
   ];
 
   const links = useMemo(() => {
@@ -82,12 +92,9 @@ export default function DashboardLayout({
     }
   };
 
-  if (isLoading) return <LoadingScreen message="Checking authorization..." />;
-
-  return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row overflow-hidden">
-      <MouseGlow />
-      <aside className="w-full md:w-64 bg-zinc-900 border-r border-zinc-800 p-4 flex flex-col">
+  const NavContent = ({ mobile = false, onItemClick }: { mobile?: boolean; onItemClick?: () => void }) => (
+    <div className="flex flex-col h-full flex-1">
+      {!mobile && (
         <div className="px-4 py-2 mb-4 relative w-full h-24 overflow-hidden">
           <Image
             src="/23_coffee.png"
@@ -97,68 +104,110 @@ export default function DashboardLayout({
             priority
           />
         </div>
-        <nav className="space-y-2 flex-1">
-          {links.map((link) => {
-            const Icon = link.icon;
-            const normalizedPathname =
-              pathname.endsWith("/") && pathname !== "/"
-                ? pathname.slice(0, -1)
-                : pathname;
-            const isActive = normalizedPathname === link.href;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-                  isActive
-                    ? "bg-zinc-800 text-primary font-medium"
-                    : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50",
-                )}
+      )}
+      <nav className="space-y-2 flex-1">
+        {links.map((link) => {
+          const Icon = link.icon;
+          const normalizedPathname =
+            pathname.endsWith("/") && pathname !== "/"
+              ? pathname.slice(0, -1)
+              : pathname;
+          const isActive = normalizedPathname === link.href;
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={onItemClick}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
+                isActive
+                  ? "bg-zinc-800 text-primary font-medium"
+                  : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50",
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              {link.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <div className="mt-auto pt-4 border-t border-zinc-800">
+        {mounted && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full cursor-pointer justify-start gap-3 px-3 py-2.5 text-sm text-primary hover:text-primary/90 hover:bg-primary/10"
               >
-                <Icon className="w-4 h-4" />
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="mt-auto pt-4 border-t border-zinc-800">
-          {mounted && (
-            <Popover>
-              <PopoverTrigger asChild>
+                <LogOut className="h-4 w-4" />
+                Log Out
+              </Button>
+            </PopoverTrigger>
+
+            <PopoverContent className="w-72 p-4 space-y-4  bg-primary/10 border border-primary/30 text-white">
+              <div className="space-y-1">
+                <h4 className="font-medium text-primary">Log out?</h4>
+                <p className="text-sm">
+                  You&apos;ll need to sign in again to access the dashboard.
+                </p>
+              </div>
+
+              <div className="flex  justify-end gap-3">
                 <Button
-                  variant="ghost"
-                  className="w-full cursor-pointer justify-start gap-3 px-3 py-2.5 text-sm text-primary hover:text-primary/90 hover:bg-primary/10"
+                  className="cursor-pointer bg-primary"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleLogout}
                 >
-                  <LogOut className="h-4 w-4" />
                   Log Out
                 </Button>
-              </PopoverTrigger>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+    </div>
+  );
 
-              <PopoverContent className="w-72 p-4 space-y-4  bg-primary/10 border border-primary/30 text-white">
-                <div className="space-y-1">
-                  <h4 className="font-medium text-primary">Log out?</h4>
-                  <p className="text-sm">
-                    You&apos;ll need to sign in again to access the dashboard.
-                  </p>
-                </div>
+  const [open, setOpen] = useState(false);
 
-                <div className="flex  justify-end gap-3">
-                  <Button
-                    className="cursor-pointer bg-primary"
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleLogout}
-                  >
-                    Log Out
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
+  if (isLoading) return <LoadingScreen message="Checking authorization..." />;
+
+  return (
+    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row overflow-hidden">
+      <MouseGlow />
+      
+      {/* Mobile Top Header */}
+      <header className="md:hidden flex items-center justify-between p-4 bg-zinc-900 border-b border-zinc-800">
+        <div className="relative w-24 h-8">
+          <Image
+            src="/23_coffee.png"
+            alt="Logo"
+            fill
+            className="object-contain"
+          />
         </div>
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-primary hover:bg-zinc-800">
+              <Menu className="h-6 w-6" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-72 bg-zinc-900 border-zinc-800 p-4">
+            <SheetHeader className="mb-6">
+              <SheetTitle className="text-left">Navigation</SheetTitle>
+            </SheetHeader>
+            <NavContent mobile onItemClick={() => setOpen(false)} />
+          </SheetContent>
+        </Sheet>
+      </header>
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-64 bg-zinc-900 border-r border-zinc-800 p-4 flex-col shrink-0">
+        <NavContent />
       </aside>
-      <main className="flex-1 p-6 overflow-auto">{children}</main>
+
+      <main className="flex-1 p-4 md:p-6 overflow-auto">{children}</main>
     </div>
   );
 }

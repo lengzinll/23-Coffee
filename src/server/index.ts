@@ -8,6 +8,7 @@ import userApp from "./routes/user";
 import scanApp from "./routes/scan";
 import wsApp from "./routes/ws";
 import statsApp from "./routes/stats";
+import settingsApp from "./routes/settings";
 import { authMiddleware } from "./middleware/auth";
 import { strictLimiter, generalLimiter } from "./middleware/rate-limit";
 const routes = app
@@ -20,7 +21,8 @@ const routes = app
   .route("/user", userApp)
   .route("/scan", scanApp)
   .route("/ws", wsApp)
-  .route("/stats", statsApp);
+  .route("/stats", statsApp)
+  .route("/settings", settingsApp);
 
 // Export types for frontend rpc - using the base app directly to ensure correct types setup
 export type AppType = typeof routes;

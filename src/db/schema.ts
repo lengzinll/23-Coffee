@@ -22,3 +22,8 @@ export const scanHistory = sqliteTable("scan_history", {
     () => new Date(),
   ),
 });
+
+export const systemSettings = sqliteTable("system_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
