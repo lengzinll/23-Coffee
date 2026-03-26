@@ -257,7 +257,7 @@ export default function ScansPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <Input
               placeholder="Search customers..."
-              className="pl-10 bg-zinc-900 border-zinc-800 text-zinc-200"
+              className="h-10 pl-10 bg-zinc-900 border-zinc-800 text-zinc-200"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />

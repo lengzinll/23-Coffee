@@ -12,7 +12,7 @@ const querySchema = z.object({
 
 const app = new Hono().get("/", zValidator("query", querySchema), async (c) => {
     try {
-        const jwtPayload = c.get("jwtPayload");
+        const jwtPayload = c.get("jwtPayload") as { role: string } | undefined;
         if (jwtPayload?.role !== "admin") {
             return c.json({ error: "Forbidden", success: false }, 403);
         }

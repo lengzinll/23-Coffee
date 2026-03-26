@@ -3,11 +3,11 @@ import "./globals.css";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "Next Play Live - Event Registration & AI Verification",
+  title: "23 Coffee",
   description:
-    "Join the ultimate challenge with Next Play Live. Register for events, get your social participation verified by AI, and secure your spot with fast QR code check-ins.",
+    "23 Coffee",
   keywords: [
-    "Next Play Live",
+    "23 Coffee",
     "Event Registration",
     "AI Verification",
     "Football Challenge",

@@ -1,0 +1,16 @@
+services:
+  web:
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    restart: always
+    env_file:
+      - .env
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --url http://web:3000
+    restart: always
+    depends_on:
+      - web
