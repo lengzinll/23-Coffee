@@ -2,13 +2,12 @@
 
 import useSWR from "swr";
 import { rpc } from "@/lib/rpc";
-import { type ApiScanWithUser, type ApiScan, type ApiUser } from "@/lib/types";
+import { type ApiScanWithUser as ApiStampWithUser, type ApiScan as ApiStamp, type ApiUser } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import {
   Clock,
   User as UserIcon,
   Search,
-  Filter,
   ChevronDown,
   ChevronRight,
   Gift,
@@ -17,13 +16,6 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { cn, formatDate } from "@/lib/utils";
 import {
@@ -50,9 +42,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const fetcher = async (): Promise<ApiScanWithUser[]> => {
+const fetcher = async (): Promise<ApiStampWithUser[]> => {
   const res = await rpc.scan.$get();
-  if (!res.ok) throw new Error("Failed to fetch scans");
+  if (!res.ok) throw new Error("Failed to fetch stamps");
   const result = await res.json();
   return result.data;
 };
@@ -78,12 +70,12 @@ const settingsFetcher = async () => {
   return result.data;
 };
 
-type GroupedScan = {
+type GroupedStamp = {
   user: ApiUser | null;
-  scans: ApiScan[];
+  stamps: ApiStamp[];
 };
 
-export default function ScansPage() {
+export default function StampsPage() {
   const { data: currentUser } = useSWR("/api/auth/me", meFetcher);
   const { data, isLoading, error, mutate } = useSWR("/api/scan", fetcher);
   const {
@@ -91,12 +83,17 @@ export default function ScansPage() {
     isLoading: isUsersLoading,
     error: usersError,
   } = useSWR(currentUser?.role === "admin" ? "/api/user" : null, usersFetcher);
-  const { data: settingsData, isLoading: isSettingsLoading, error: settingsError } = useSWR("/api/settings", settingsFetcher);
+  const {
+    data: settingsData,
+    isLoading: isSettingsLoading,
+    error: settingsError,
+  } = useSWR("/api/settings", settingsFetcher);
 
-  const STAMPS_PER_CYCLE = settingsData?.STAMPS_PER_CYCLE ? parseInt(settingsData.STAMPS_PER_CYCLE, 10) : 6;
+  const STAMPS_PER_CYCLE = settingsData?.STAMPS_PER_CYCLE
+    ? parseInt(settingsData.STAMPS_PER_CYCLE, 10)
+    : 6;
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [expandedUsers, setExpandedUsers] = useState<Record<number, boolean>>(
     {},
   );
@@ -105,28 +102,28 @@ export default function ScansPage() {
 
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedUserForScan, setSelectedUserForScan] = useState<{
+  const [selectedUserForStamp, setSelectedUserForStamp] = useState<{
     id: number;
     username: string;
   } | null>(null);
 
   const handleManualAddClick = (userId: number, username: string) => {
-    setSelectedUserForScan({ id: userId, username });
+    setSelectedUserForStamp({ id: userId, username });
     setIsDialogOpen(true);
   };
 
   const handleManualAddConfirm = useCallback(async () => {
-    if (isAdding || !selectedUserForScan) return;
+    if (isAdding || !selectedUserForStamp) return;
 
     setIsAdding(true);
     try {
       const res = await rpc.scan.$post({
-        json: { userId: selectedUserForScan.id },
+        json: { userId: selectedUserForStamp.id },
       });
 
       const result = await res.json();
       if (res.ok && result.success === true) {
-        toast.success(`Stamp added for ${selectedUserForScan.username}`);
+        toast.success(`Stamp added for ${selectedUserForStamp.username}`);
         mutate(); // Refresh the list
       } else {
         const errorMsg =
@@ -139,9 +136,9 @@ export default function ScansPage() {
     } finally {
       setIsAdding(false);
       setIsDialogOpen(false);
-      setSelectedUserForScan(null);
+      setSelectedUserForStamp(null);
     }
-  }, [isAdding, mutate, selectedUserForScan]);
+  }, [isAdding, mutate, selectedUserForStamp]);
 
   useEffect(() => {
     setMounted(true);
@@ -154,7 +151,7 @@ export default function ScansPage() {
   const groupedData = useMemo(() => {
     if (!data || !currentUser) return [];
 
-    const groups: Record<number, GroupedScan> = {};
+    const groups: Record<number, GroupedStamp> = {};
 
     if (currentUser.role === "admin") {
       if (!usersData) return [];
@@ -162,14 +159,14 @@ export default function ScansPage() {
         if (user.role === "user") {
           groups[user.id] = {
             user,
-            scans: [],
+            stamps: [],
           };
         }
       });
     } else {
       groups[currentUser.id] = {
         user: currentUser as unknown as ApiUser,
-        scans: [],
+        stamps: [],
       };
     }
 
@@ -180,14 +177,14 @@ export default function ScansPage() {
       if (!groups[userId]) {
         groups[userId] = {
           user: item.user,
-          scans: [],
+          stamps: [],
         };
       }
-      groups[userId].scans.push(item.scan_history);
+      groups[userId].stamps.push(item.scan_history);
     });
 
     Object.values(groups).forEach((group) => {
-      group.scans.sort((a, b) => {
+      group.stamps.sort((a, b) => {
         const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
         return dateB - dateA;
@@ -200,26 +197,22 @@ export default function ScansPage() {
       const matchesSearch =
         !searchTerm ||
         username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        group.scans.some((s) =>
+        group.stamps.some((s) =>
           s.status.toLowerCase().includes(searchTerm.toLowerCase()),
         );
 
-      const matchesStatus =
-        selectedStatus === "all" ||
-        group.scans.some((s) => s.status === selectedStatus);
-
-      return matchesSearch && matchesStatus;
+      return matchesSearch;
     });
 
-    // Sort by latest scan first, then by user creation time descending
+    // Sort by latest stamp first, then by user creation time descending
     result.sort((a, b) => {
-      const latestScanA = a.scans[0]?.timestamp
-        ? new Date(a.scans[0].timestamp).getTime()
+      const latestStampA = a.stamps[0]?.timestamp
+        ? new Date(a.stamps[0].timestamp).getTime()
         : 0;
-      const latestScanB = b.scans[0]?.timestamp
-        ? new Date(b.scans[0].timestamp).getTime()
+      const latestStampB = b.stamps[0]?.timestamp
+        ? new Date(b.stamps[0].timestamp).getTime()
         : 0;
-      if (latestScanA !== latestScanB) return latestScanB - latestScanA;
+      if (latestStampA !== latestStampB) return latestStampB - latestStampA;
 
       const userA = a.user?.timestamp
         ? new Date(a.user.timestamp).getTime()
@@ -231,7 +224,7 @@ export default function ScansPage() {
     });
 
     return result;
-  }, [data, usersData, currentUser, searchTerm, selectedStatus]);
+  }, [data, usersData, currentUser, searchTerm]);
 
   if (error || usersError || settingsError)
     return (
@@ -252,8 +245,8 @@ export default function ScansPage() {
             Track customer progress. {STAMPS_PER_CYCLE} stamps = 1 free coffee.
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-          <div className="relative w-full sm:w-80">
+        <div className="flex items-center gap-4 w-full">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <Input
               placeholder="Search customers..."
@@ -261,20 +254,6 @@ export default function ScansPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-          </div>
-          <div className="flex items-center gap-2 bg-zinc-950/50 border border-zinc-800 rounded-lg p-1.5 pr-2 w-full sm:w-auto">
-            <Filter className="h-3.5 w-3.5 text-zinc-500 ml-1" />
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="h-7 border-none bg-transparent p-1 focus:ring-0 text-xs font-medium text-zinc-200 min-w-[100px] w-full">
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200">
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
       </div>
@@ -291,9 +270,9 @@ export default function ScansPage() {
           groupedData.map((group, index) => {
             const userId = group.user?.id || 0;
             const isExpanded = expandedUsers[userId];
-            const totalScans = group.scans.length;
-            const currentCycleCount = totalScans % STAMPS_PER_CYCLE;
-            const completedCycles = Math.floor(totalScans / STAMPS_PER_CYCLE);
+            const totalStamps = group.stamps.length;
+            const currentCycleCount = totalStamps % STAMPS_PER_CYCLE;
+            const completedCycles = Math.floor(totalStamps / STAMPS_PER_CYCLE);
 
             return (
               <Collapsible
@@ -337,14 +316,16 @@ export default function ScansPage() {
                                   {completedCycles}{" "}
                                   {completedCycles > 1 ? "Coffees" : "Coffee"}
                                 </span>
-                                <span className="xs:hidden">{completedCycles}</span>
+                                <span className="xs:hidden">
+                                  {completedCycles}
+                                </span>
                               </Badge>
                             )}
                             <Badge
                               variant="outline"
                               className="bg-zinc-950/50 border-zinc-800 text-zinc-500 text-[10px] h-5 py-0 px-1.5 whitespace-nowrap"
                             >
-                              Total: {totalScans}
+                              Total: {totalStamps}
                             </Badge>
                           </div>
                           <div className="w-20 sm:w-32 h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-1">
@@ -356,7 +337,8 @@ export default function ScansPage() {
                             />
                           </div>
                           <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold mt-0.5">
-                            {currentCycleCount}/{STAMPS_PER_CYCLE} <span className="hidden xs:inline">next</span>
+                            {currentCycleCount}/{STAMPS_PER_CYCLE}{" "}
+                            <span className="hidden xs:inline">next</span>
                           </span>
                         </div>
                         <div className="h-8 w-8 flex items-center justify-center text-zinc-600">
@@ -372,24 +354,24 @@ export default function ScansPage() {
 
                   <CollapsibleContent className="border-t border-zinc-800/50 bg-black/10 p-3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
                     <div className="space-y-4">
-                      {/* Group scans into cycles of STAMPS_PER_CYCLE */}
+                      {/* Group stamps into cycles of STAMPS_PER_CYCLE */}
                       {Array.from({
                         length: Math.max(
                           1,
-                          Math.ceil((totalScans + 1) / STAMPS_PER_CYCLE),
+                          Math.ceil((totalStamps + 1) / STAMPS_PER_CYCLE),
                         ),
                       })
                         .reverse()
                         .map((_, cycleIndex, arr) => {
                           const actualCycleIndex = arr.length - 1 - cycleIndex;
-                          const cycleScans = [...group.scans]
+                          const cycleStamps = [...group.stamps]
                             .reverse()
                             .slice(
                               actualCycleIndex * STAMPS_PER_CYCLE,
                               (actualCycleIndex + 1) * STAMPS_PER_CYCLE,
                             );
                           const isCycleComplete =
-                            cycleScans.length === STAMPS_PER_CYCLE;
+                            cycleStamps.length === STAMPS_PER_CYCLE;
 
                           return (
                             <div key={actualCycleIndex} className="relative">
@@ -410,13 +392,13 @@ export default function ScansPage() {
                                 {/* Show STAMPS_PER_CYCLE slots per cycle */}
                                 {Array.from({ length: STAMPS_PER_CYCLE }).map(
                                   (_, slotIndex) => {
-                                    const scan = cycleScans[slotIndex];
+                                    const stamp = cycleStamps[slotIndex];
 
                                     return (
                                       <div
                                         key={slotIndex}
                                         onClick={
-                                          !scan && currentUser?.role === "admin"
+                                          !stamp && currentUser?.role === "admin"
                                             ? () =>
                                                 handleManualAddClick(
                                                   userId,
@@ -427,10 +409,10 @@ export default function ScansPage() {
                                         }
                                         className={cn(
                                           "aspect-square rounded-xl border flex flex-col items-center justify-center gap-2 transition-all p-2 relative group",
-                                          scan
+                                          stamp
                                             ? "bg-zinc-800/50 border-zinc-700 shadow-lg shadow-black/20"
                                             : "bg-transparent border-dashed border-zinc-800",
-                                          !scan &&
+                                          !stamp &&
                                             currentUser?.role === "admin" &&
                                             "cursor-pointer hover:border-primary/50 hover:bg-primary/5",
                                         )}
@@ -439,7 +421,7 @@ export default function ScansPage() {
                                           <div
                                             className={cn(
                                               "absolute top-4 right-4 transition-all duration-300 flex items-center gap-2",
-                                              scan
+                                              stamp
                                                 ? "text-emerald-500 fill-emerald-500/20 animate-bounce"
                                                 : "text-zinc-800",
                                             )}
@@ -447,24 +429,24 @@ export default function ScansPage() {
                                             <Badge>Free</Badge>
                                           </div>
                                         )}
-                                        {scan ? (
+                                        {stamp ? (
                                           <>
                                             <Badge
                                               className={cn(
                                                 "capitalize",
-                                                scan.status === "approved" &&
+                                                stamp.status === "approved" &&
                                                   "bg-emerald-500 text-white",
-                                                scan.status === "pending" &&
+                                                stamp.status === "pending" &&
                                                   "bg-yellow-500 text-black",
-                                                scan.status === "rejected" &&
+                                                stamp.status === "rejected" &&
                                                   "bg-red-500 text-white",
                                               )}
                                             >
-                                              {scan.status}
+                                              {stamp.status}
                                             </Badge>
                                             <span className="text-zinc-400 text-center leading-tight text-sm mt-1">
-                                              {scan.timestamp
-                                                ? formatDate(scan.timestamp)
+                                              {stamp.timestamp
+                                                ? formatDate(stamp.timestamp)
                                                 : "-"}
                                             </span>
                                           </>
@@ -506,7 +488,7 @@ export default function ScansPage() {
             <AlertDialogDescription className="text-zinc-400">
               Are you sure you want to manually add a stamp for{" "}
               <span className="font-bold text-primary">
-                {selectedUserForScan?.username}
+                {selectedUserForStamp?.username}
               </span>
               ? This action cannot be undone and will add progress to their
               coupon.

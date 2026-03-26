@@ -17,16 +17,16 @@ const app = new Hono()
             return c.json({ data: [] }, 401);
         }
 
-        let scans;
+        let stamps;
         if (payload.role === "admin") {
-            scans = await db
+            stamps = await db
                 .select()
                 .from(scanHistory)
                 .leftJoin(user, eq(scanHistory.user_id, user.id))
                 .where(eq(user.role, "user"))
                 .orderBy(desc(scanHistory.timestamp));
         } else {
-            scans = await db
+            stamps = await db
                 .select()
                 .from(scanHistory)
                 .leftJoin(user, eq(scanHistory.user_id, user.id))
@@ -34,71 +34,37 @@ const app = new Hono()
                 .orderBy(desc(scanHistory.timestamp));
         }
 
-        return c.json({ data: scans });
+        return c.json({ data: stamps });
     })
     .post(
         "/",
         zValidator(
             "json",
             z.object({
-                qrContent: z.string().optional(), // A secret value like "SHOP_CHECKIN_2026"
-                userId: z.number().optional(),   // Optional for admin manual entry
+                userId: z.number(),   // For admin manual entry
             })
         ),
         async (c) => {
-            const { qrContent, userId } = c.req.valid("json");
+            const { userId } = c.req.valid("json");
             const payload = c.get("jwtPayload") as { id: number; username: string; role: string };
 
             if (!payload?.id) {
                 return c.json({ success: false, message: "Unauthorized: Missing user ID" }, 401);
             }
 
-            let targetUserId = payload.id;
-            let skipCooldown = false;
-
-            // 1. Admin Manual Entry Logic
-            if (userId !== undefined) {
-                if (payload.role !== "admin") {
-                    return c.json({ success: false, message: "Unauthorized: Only admins can specify a User ID" }, 403);
-                }
-                targetUserId = userId;
-                skipCooldown = true;
-            }
-            // 2. Customer Self-Scan Logic
-            else if (qrContent !== undefined) {
-                const VALID_QR_CONTENT = "SHOP_CHECKIN_2026";
-                if (qrContent !== VALID_QR_CONTENT) {
-                    return c.json({ success: false, message: "Invalid QR Code Content" }, 400);
-                }
-
-                // Check cooldown for customers
-                const now = Date.now();
-                const lastScan = scanCooldowns.get(payload.id);
-                if (lastScan && now - lastScan < COOLDOWN_MS) {
-                    const remainingMins = Math.ceil((COOLDOWN_MS - (now - lastScan)) / 60000);
-                    return c.json({
-                        success: false,
-                        message: `Please wait ${remainingMins} more minutes before scanning again.`
-                    }, 429);
-                }
-            } else {
-                return c.json({ success: false, message: "Either qrContent or userId must be provided" }, 400);
+            if (payload.role !== "admin") {
+                return c.json({ success: false, message: "Unauthorized: Only admins can manually add stamps" }, 403);
             }
 
-            const [newScan] = await db
+            const [newStamp] = await db
                 .insert(scanHistory)
                 .values({
-                    user_id: targetUserId,
-                    status: skipCooldown ? "approved" : "pending",
+                    user_id: userId,
+                    status: "approved",
                 })
                 .returning();
 
-            // Only update cooldown for self-scans
-            if (!skipCooldown) {
-                scanCooldowns.set(payload.id, Date.now());
-            }
-
-            return c.json({ success: true, data: newScan });
+            return c.json({ success: true, data: newStamp });
         }
     );
 

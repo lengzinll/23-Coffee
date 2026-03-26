@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ClipboardList, QrCode, ShieldCheck, Users } from "lucide-react";
+import { ClipboardList, Users, ShieldCheck, UserSearch } from "lucide-react";
 import { MouseGlow } from "@/components/mouse-glow";
 import { db } from "@/db";
 import { scanHistory } from "@/db/schema";
@@ -16,7 +16,7 @@ import { CountUp } from "@/components/count-up";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-async function getTotalScans(): Promise<number> {
+async function getTotalStamps(): Promise<number> {
   try {
     const result = await db
       .select({ count: sql<number>`count(*)` })
@@ -29,7 +29,7 @@ async function getTotalScans(): Promise<number> {
 }
 
 export default async function Home() {
-  const totalScans = await getTotalScans();
+  const totalStamps = await getTotalStamps();
 
   return (
     <div className="relative min-h-screen  text-primary-foreground flex flex-col items-center justify-center p-4 overflow-hidden">
@@ -46,9 +46,9 @@ export default async function Home() {
             />
           </div>
           <p className="text-xl text-primary-foreground max-w-2xl mx-auto">
-            មកចុះឈ្មោះ
-            និងបញ្ជាក់អត្តសញ្ញាណរបស់អ្នកតាមរយៈប្រព័ន្ធដ៏ល្អឥតខ្ចោះរបស់យើង។
-            សូមចូលរួម challenge ហើយប្រញាប់កក់កន្លែងជាបន្ទាន់ មុនអស់ទីតាំង! 💪🔥
+            មកចុះឈ្មោះសន្សំត្រាឌីជីថលជាមួយ 23 Coffee
+            ដើម្បីទទួលបានភេសជ្ជៈឥតគិតថ្លៃ និងការផ្តល់ជូនពិសេសៗ!
+            រាល់ការជាវភេសជ្ជៈ គឺជាការសន្សំពិន្ទុឆ្ពោះទៅរករង្វាន់ដ៏អស្ចារ្យ។ ☕️✨
           </p>
         </div>
 
@@ -59,10 +59,10 @@ export default async function Home() {
               <Users className="w-5 h-5" />
             </div>
             <span className="text-zinc-400 text-sm font-medium">
-              ចំនួនការស្កេនសរុប (Total Scans)
+              ចំនួនត្រាសរុប (Total Stamps)
             </span>
             <span className="text-2xl font-bold text-white tabular-nums">
-              <CountUp target={totalScans} />
+              <CountUp target={totalStamps} />
             </span>
           </div>
         </div>
@@ -71,27 +71,27 @@ export default async function Home() {
           <Card className="bg-zinc-900 border-zinc-800 text-zinc-100">
             <CardHeader>
               <ClipboardList className="w-10 h-10 text-primary mb-2 mx-auto" />
-              <CardTitle>ចុះឈ្មោះបានងាយស្រួល</CardTitle>
+              <CardTitle>សន្សំត្រាងាយស្រួល</CardTitle>
               <CardDescription className="text-zinc-400">
-                បំពេញព័ត៌មានរបស់អ្នកបានយ៉ាងរហ័ស ហើយចូលរួមព្រឹត្តិការណ៍ភ្លាមៗ។
+                គ្រាន់តែប្រាប់ឈ្មោះរបស់អ្នកទៅកាន់បុគ្គលិក ដើម្បីសន្សំត្រាបានយ៉ាងរហ័ស។
               </CardDescription>
             </CardHeader>
           </Card>
           <Card className="bg-zinc-900 border-zinc-800 text-zinc-100">
             <CardHeader>
               <ShieldCheck className="w-10 h-10 text-primary mb-2 mx-auto" />
-              <CardTitle>ផ្ទៀងផ្ទាត់អត្តសញ្ញាណដោយ AI</CardTitle>
+              <CardTitle>ប្តូររង្វាន់ភ្លាមៗ</CardTitle>
               <CardDescription className="text-zinc-400">
-                AI ផ្ទៀងផ្ទាត់ការបំពេញលក្ខខណ្ឌរបស់អ្នកភ្លាមៗ។
+                នៅពេលសន្សំគ្រប់ចំនួន អ្នកអាចប្តូរយកភេសជ្ជៈឥតគិតថ្លៃបានយ៉ាងរហ័ស។
               </CardDescription>
             </CardHeader>
           </Card>
           <Card className="bg-zinc-900 border-zinc-800 text-zinc-100">
             <CardHeader>
-              <QrCode className="w-10 h-10 text-primary mb-2 mx-auto" />
-              <CardTitle>Check-in បានរហ័ស</CardTitle>
+              <UserSearch className="w-10 h-10 text-primary mb-2 mx-auto" />
+              <CardTitle>ពិនិត្យស្ថានភាពត្រា</CardTitle>
               <CardDescription className="text-zinc-400">
-                QR code ដ៏មានសុវត្ថិភាពសម្រាប់ការចូលរួមព្រឹត្តិការណ៍។
+                តាមដានចំនួនត្រាដែលអ្នកសន្សំបានគ្រប់ពេលវេលា តាមរយៈទូរស័ព្ទដៃរបស់អ្នក។
               </CardDescription>
             </CardHeader>
           </Card>
@@ -117,7 +117,8 @@ export default async function Home() {
       </div>
 
       <footer className="mt-10 text-primary-foreground text-sm">
-        &copy; {new Date().getFullYear()} Next Play Live. រក្សាសិទ្ធិគ្រប់យ៉ាង។
+        &copy; {new Date().getFullYear()} NSM Technology And Services.
+        រក្សាសិទ្ធិគ្រប់យ៉ាង។
       </footer>
     </div>
   );

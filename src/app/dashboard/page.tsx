@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, QrCode, Clock, CheckCircle, Activity, Coffee } from "lucide-react";
+import { Users, UserSearch, Clock, CheckCircle, Activity, Coffee } from "lucide-react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
@@ -51,7 +51,7 @@ export default function DashboardOverview() {
     return <LoadingScreen message="Loading overview metrics..." />;
   }
 
-  const { totalUsers, scans, recentActivity } = data;
+  const { totalUsers, stamps, recentActivity } = data;
 
   return (
     <div className="space-y-8 pb-20">
@@ -97,10 +97,10 @@ export default function DashboardOverview() {
             <CardTitle className="text-sm font-medium text-zinc-400">
               Total Stamps
             </CardTitle>
-            <QrCode className="w-4 h-4 text-blue-500" />
+            <UserSearch className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-zinc-100">{scans.total}</div>
+            <div className="text-2xl font-bold text-zinc-100">{stamps.total}</div>
           </CardContent>
         </Card>
 
@@ -113,7 +113,7 @@ export default function DashboardOverview() {
             <CheckCircle className="w-4 h-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-zinc-100">{scans.approved}</div>
+            <div className="text-2xl font-bold text-zinc-100">{stamps.approved}</div>
           </CardContent>
         </Card>
 
@@ -126,7 +126,7 @@ export default function DashboardOverview() {
             <Clock className="w-4 h-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-zinc-100">{scans.pending}</div>
+            <div className="text-2xl font-bold text-zinc-100">{stamps.pending}</div>
           </CardContent>
         </Card>
       </div>

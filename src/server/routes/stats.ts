@@ -52,7 +52,7 @@ const app = new Hono().get("/", zValidator("query", querySchema), async (c) => {
                 .where(and(...rejectedFilters)),
         ]);
 
-        const recentScans = await db
+        const recentActivity = await db
             .select({
                 id: scanHistory.id,
                 status: scanHistory.status,
@@ -69,13 +69,13 @@ const app = new Hono().get("/", zValidator("query", querySchema), async (c) => {
             success: true,
             data: {
                 totalUsers: totalUsers[0].count,
-                scans: {
+                stamps: {
                     pending: pending[0].count,
                     approved: approved[0].count,
                     rejected: rejected[0].count,
                     total: pending[0].count + approved[0].count + rejected[0].count,
                 },
-                recentActivity: recentScans,
+                recentActivity: recentActivity,
             },
         });
     } catch (error) {
