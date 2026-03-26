@@ -13,6 +13,7 @@ import {
   Gift,
   CheckCircle2,
   Coffee,
+  Trash2,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
@@ -99,6 +100,7 @@ export default function StampsPage() {
   );
   const [mounted, setMounted] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -106,6 +108,8 @@ export default function StampsPage() {
     id: number;
     username: string;
   } | null>(null);
+  const [stampToDelete, setStampToDelete] = useState<number | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const handleManualAddClick = (userId: number, username: string) => {
     setSelectedUserForStamp({ id: userId, username });
@@ -139,6 +143,34 @@ export default function StampsPage() {
       setSelectedUserForStamp(null);
     }
   }, [isAdding, mutate, selectedUserForStamp]);
+  
+  const handleDeleteStamp = useCallback(async (id: number) => {
+    if (isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      const res = await rpc.scan[":id"].$delete({
+        param: { id: id.toString() },
+      });
+
+      const result = await res.json();
+      if (res.ok && result.success === true) {
+        toast.success("Stamp deleted successfully");
+        mutate(); // Refresh the list
+      } else {
+        const errorMsg =
+          result.success === false ? result.message : "Failed to delete stamp";
+        toast.error(errorMsg);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An error occurred while deleting the stamp");
+    } finally {
+      setIsDeleting(false);
+      setStampToDelete(null);
+      setIsDeleteDialogOpen(false);
+    }
+  }, [isDeleting, mutate]);
 
   useEffect(() => {
     setMounted(true);
@@ -395,63 +427,87 @@ export default function StampsPage() {
                                     const stamp = cycleStamps[slotIndex];
 
                                     return (
-                                      <div
-                                        key={slotIndex}
-                                        onClick={
-                                          !stamp && currentUser?.role === "admin"
-                                            ? () =>
-                                                handleManualAddClick(
-                                                  userId,
-                                                  group.user?.username ||
-                                                    "Guest",
-                                                )
-                                            : undefined
-                                        }
-                                        className={cn(
-                                          "aspect-square rounded-xl border flex flex-col items-center justify-center gap-2 transition-all p-2 relative group",
-                                          stamp
-                                            ? "bg-zinc-800/50 border-zinc-700 shadow-lg shadow-black/20"
-                                            : "bg-transparent border-dashed border-zinc-800",
-                                          !stamp &&
-                                            currentUser?.role === "admin" &&
-                                            "cursor-pointer hover:border-primary/50 hover:bg-primary/5",
-                                        )}
-                                      >
-                                        {slotIndex === STAMPS_PER_CYCLE - 1 && (
-                                          <div
-                                            className={cn(
-                                              "absolute top-4 right-4 transition-all duration-300 flex items-center gap-2",
-                                              stamp
-                                                ? "text-emerald-500 fill-emerald-500/20 animate-bounce"
-                                                : "text-zinc-800",
-                                            )}
-                                          >
-                                            <Badge>Free</Badge>
-                                          </div>
-                                        )}
-                                        {stamp ? (
-                                          <>
-                                            <Badge
+                                        <div
+                                          key={slotIndex}
+                                          onClick={
+                                            !stamp && currentUser?.role === "admin"
+                                              ? () =>
+                                                  handleManualAddClick(
+                                                    userId,
+                                                    group.user?.username ||
+                                                      "Guest",
+                                                  )
+                                              : undefined
+                                          }
+                                          className={cn(
+                                            "aspect-square rounded-xl border flex flex-col items-center justify-center gap-2 transition-all p-0 relative group overflow-hidden",
+                                            stamp
+                                              ? "bg-zinc-800/50 border-zinc-700 shadow-lg shadow-black/20"
+                                              : "bg-transparent border-dashed border-zinc-800",
+                                            !stamp &&
+                                              currentUser?.role === "admin" &&
+                                              "cursor-pointer hover:border-primary/50 hover:bg-primary/5",
+                                          )}
+                                        >
+                                          {slotIndex === STAMPS_PER_CYCLE - 1 && (
+                                            <div
                                               className={cn(
-                                                "capitalize",
-                                                stamp.status === "approved" &&
-                                                  "bg-emerald-500 text-white",
-                                                stamp.status === "pending" &&
-                                                  "bg-yellow-500 text-black",
-                                                stamp.status === "rejected" &&
-                                                  "bg-red-500 text-white",
+                                                "absolute top-4 right-4 transition-all duration-300 flex items-center gap-2 z-10",
+                                                stamp
+                                                  ? "text-emerald-500 fill-emerald-500/20 animate-bounce"
+                                                  : "text-zinc-800",
                                               )}
                                             >
-                                              {stamp.status}
-                                            </Badge>
-                                            <span className="text-zinc-400 text-center leading-tight text-sm mt-1">
-                                              {stamp.timestamp
-                                                ? formatDate(stamp.timestamp)
-                                                : "-"}
-                                            </span>
-                                          </>
-                                        ) : (
-                                          <>
+                                              <Badge>Free</Badge>
+                                            </div>
+                                          )}
+                                          {stamp ? (
+                                            <>
+                                              {stamp.status === "approved" ? (
+                                                <div className="absolute inset-0 flex items-center justify-center animate-in zoom-in-50 duration-500 p-2">
+                                                  <img
+                                                    src="/23_coffee.png"
+                                                    alt="Stamp"
+                                                    className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.7)] -rotate-12 group-hover:rotate-0 transition-transform duration-500"
+                                                  />
+                                                </div>
+                                              ) : (
+                                                <Badge
+                                                  className={cn(
+                                                    "capitalize",
+                                                    stamp.status === "pending" &&
+                                                      "bg-yellow-500 text-black",
+                                                    stamp.status === "rejected" &&
+                                                      "bg-red-500 text-white",
+                                                  )}
+                                                >
+                                                  {stamp.status}
+                                                </Badge>
+                                              )}
+                                              {currentUser?.role === "admin" && (
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="absolute top-1 right-1 h-8 w-8 text-white/50 hover:text-red-500 hover:bg-red-500/20 transition-colors z-20 backdrop-blur-sm rounded-full"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setStampToDelete(stamp.id);
+                                                    setIsDeleteDialogOpen(true);
+                                                  }}
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              )}
+                                              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-full text-center z-10">
+                                                <span className="text-[10px] text-zinc-100 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full border border-white/10 font-medium">
+                                                  {stamp.timestamp
+                                                    ? formatDate(stamp.timestamp)
+                                                    : "-"}
+                                                </span>
+                                              </div>
+                                            </>
+                                          ) : (
+                                            <>
                                             <div className="h-6 w-6 rounded-full border border-zinc-800 flex items-center justify-center">
                                               <span className="text-xs text-zinc-700 font-bold">
                                                 {slotIndex + 1}
@@ -507,6 +563,34 @@ export default function StampsPage() {
               className="bg-primary text-black hover:bg-primary/90 font-bold"
             >
               {isAdding ? "Loading..." : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="bg-zinc-950 border-zinc-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100 font-bold">
+              Cancel Stamp
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              Are you sure you want to cancel this stamp? This will remove it from the customer's history and reset this slot to empty.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-100">
+              Go Back
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (stampToDelete) handleDeleteStamp(stampToDelete);
+              }}
+              disabled={isDeleting}
+              className="bg-red-600 text-white hover:bg-red-700 font-bold"
+            >
+              {isDeleting ? "Deleting..." : "Confirm Cancel"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

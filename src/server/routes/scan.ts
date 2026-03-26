@@ -66,6 +66,31 @@ const app = new Hono()
 
             return c.json({ success: true, data: newStamp });
         }
+    )
+    .delete(
+        "/:id",
+        zValidator(
+            "param",
+            z.object({
+                id: z.string(),
+            })
+        ),
+        async (c) => {
+            const { id } = c.req.valid("param");
+            const payload = c.get("jwtPayload") as { id: number; username: string; role: string } | undefined;
+
+            if (!payload?.id) {
+                return c.json({ success: false, message: "Unauthorized: Missing user ID" }, 401);
+            }
+
+            if (payload.role !== "admin") {
+                return c.json({ success: false, message: "Unauthorized: Only admins can delete stamps" }, 403);
+            }
+
+            await db.delete(scanHistory).where(eq(scanHistory.id, parseInt(id, 10)));
+
+            return c.json({ success: true, message: "Stamp deleted successfully" });
+        }
     );
 
 export default app;
