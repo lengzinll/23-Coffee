@@ -8,6 +8,7 @@ import {
   LogOut,
   Settings,
   Menu,
+  User as UserIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
@@ -61,6 +62,7 @@ export default function DashboardLayout({
     },
     { href: "/dashboard/users", label: "System Users", icon: Users, roles: ["admin"] },
     { href: "/dashboard/setting", label: "Settings", icon: Settings, roles: ["admin"] },
+    { href: "/dashboard/profile", label: "Profile", icon: UserIcon, roles: ["user"] },
   ];
 
   const links = useMemo(() => {

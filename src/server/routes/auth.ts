@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "../../db";
 import { user } from "../../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { sign } from "hono/jwt";
 import { setCookie } from "hono/cookie";
 import { env } from "../../env";
@@ -30,7 +30,28 @@ const authApp = new Hono({ strict: false })
         .get();
 
       if (existing) {
-        return c.json({ success: false, message: "Username already taken" }, 409);
+        // Find alternative username
+        const similarUsers = await db
+          .select({ username: user.username })
+          .from(user)
+          .where(like(user.username, `${username}%`));
+        
+        const takenSet = new Set(similarUsers.map((u) => u.username));
+        let altUsername = "";
+        
+        for (let i = 1; i <= 999; i++) {
+          const checkName = `${username}${i}`;
+          if (!takenSet.has(checkName)) {
+            altUsername = checkName;
+            break;
+          }
+        }
+
+        const message = altUsername 
+          ? `Username already taken. Please try '${altUsername}'` 
+          : "Username already taken";
+
+        return c.json({ success: false, message }, 409);
       }
 
       const hashed = await argon2.hash(password);
@@ -93,6 +114,48 @@ const authApp = new Hono({ strict: false })
     }
     return c.json({ success: true, user: payload });
   })
+  .post(
+    "/change-password",
+    zValidator(
+      "json",
+      z.object({
+        currentPassword: z.string().min(1, "Current password is required"),
+        newPassword: z.string().min(6),
+      }),
+    ),
+    async (c) => {
+      const payload = c.get("jwtPayload") as { id: number; username: string; role: string } | undefined;
+      if (!payload) {
+        return c.json({ success: false, message: "Not logged in" }, 401);
+      }
+
+      const { currentPassword, newPassword } = c.req.valid("json");
+
+      const _user = await db
+        .select()
+        .from(user)
+        .where(eq(user.id, payload.id))
+        .get();
+
+      if (!_user) {
+        return c.json({ success: false, message: "User not found" }, 404);
+      }
+
+      const isValidPassword = await argon2.verify(_user.password, currentPassword);
+      if (!isValidPassword) {
+        return c.json({ success: false, message: "Incorrect current password" }, 401);
+      }
+
+      const hashedNew = await argon2.hash(newPassword);
+
+      await db
+        .update(user)
+        .set({ password: hashedNew })
+        .where(eq(user.id, payload.id));
+
+      return c.json({ success: true, message: "Password updated successfully" });
+    },
+  )
   .post("/logout", async (c) => {
     setCookie(c, "auth_token", "", {
       path: "/",

@@ -73,7 +73,8 @@ export default async function Home() {
               <ClipboardList className="w-10 h-10 text-primary mb-2 mx-auto" />
               <CardTitle>សន្សំត្រាងាយស្រួល</CardTitle>
               <CardDescription className="text-zinc-400">
-                គ្រាន់តែប្រាប់ឈ្មោះរបស់អ្នកទៅកាន់បុគ្គលិក ដើម្បីសន្សំត្រាបានយ៉ាងរហ័ស។
+                គ្រាន់តែប្រាប់ឈ្មោះរបស់អ្នកទៅកាន់បុគ្គលិក
+                ដើម្បីសន្សំត្រាបានយ៉ាងរហ័ស។
               </CardDescription>
             </CardHeader>
           </Card>
@@ -91,7 +92,8 @@ export default async function Home() {
               <UserSearch className="w-10 h-10 text-primary mb-2 mx-auto" />
               <CardTitle>ពិនិត្យស្ថានភាពត្រា</CardTitle>
               <CardDescription className="text-zinc-400">
-                តាមដានចំនួនត្រាដែលអ្នកសន្សំបានគ្រប់ពេលវេលា តាមរយៈទូរស័ព្ទដៃរបស់អ្នក។
+                តាមដានចំនួនត្រាដែលអ្នកសន្សំបានគ្រប់ពេលវេលា
+                តាមរយៈទូរស័ព្ទដៃរបស់អ្នក។
               </CardDescription>
             </CardHeader>
           </Card>
@@ -117,8 +119,8 @@ export default async function Home() {
       </div>
 
       <footer className="mt-10 text-primary-foreground text-sm">
-        &copy; {new Date().getFullYear()} NSM Technology And Services.
-        រក្សាសិទ្ធិគ្រប់យ៉ាង។
+        Copyright &copy; {new Date().getFullYear()} NSM Technology Co., LTD. All
+        Rights Reserved.
       </footer>
     </div>
   );

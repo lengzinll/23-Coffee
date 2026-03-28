@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserSearch, Clock, CheckCircle, Activity, Coffee } from "lucide-react";
+import { Users, UserSearch, Clock, CheckCircle, Activity, Coffee, Award } from "lucide-react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
@@ -22,12 +22,16 @@ const fetchStats = async (url: string) => {
   return result.data;
 };
 
-const defaultValue = {
-  from: new Date(),
-  to: new Date(),
-}
 
 export default function DashboardOverview() {
+  const defaultValue = useMemo(() => {
+    const from = new Date();
+    from.setHours(0, 0, 0, 0);
+    const to = new Date();
+    to.setHours(23, 59, 59, 999);
+    return { from, to };
+  }, []);
+
   const [date, setDate] = useState<DateRange | undefined>(defaultValue);
 
   const swrUrl = useMemo(() => {
@@ -51,7 +55,7 @@ export default function DashboardOverview() {
     return <LoadingScreen message="Loading overview metrics..." />;
   }
 
-  const { totalUsers, stamps, recentActivity } = data;
+  const { totalUsers, stamps, recentActivity, activeCustomers, newCustomers, returningCustomers, isDateFiltered, topCustomers } = data;
 
   return (
     <div className="space-y-8 pb-20">
@@ -82,12 +86,31 @@ export default function DashboardOverview() {
         <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-zinc-400">
-              Total Users
+              {isDateFiltered ? "New Signups" : "Total Users"}
             </CardTitle>
             <Users className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-zinc-100">{totalUsers}</div>
+          </CardContent>
+        </Card>
+
+        {/* Active Customers */}
+        <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-zinc-400">
+              Active Customers
+            </CardTitle>
+            <Activity className="w-4 h-4 text-purple-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-zinc-100">{activeCustomers}</div>
+            {isDateFiltered && activeCustomers > 0 && (
+              <p className="text-xs text-zinc-500 mt-1">
+                <span className="text-emerald-500">{newCustomers} new</span> &middot;{" "}
+                <span className="text-blue-500">{returningCustomers} returning</span>
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -108,7 +131,7 @@ export default function DashboardOverview() {
         <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-zinc-400">
-              Approved
+              Stamps Issued
             </CardTitle>
             <CheckCircle className="w-4 h-4 text-emerald-500" />
           </CardHeader>
@@ -116,73 +139,107 @@ export default function DashboardOverview() {
             <div className="text-2xl font-bold text-zinc-100">{stamps.approved}</div>
           </CardContent>
         </Card>
-
-        {/* Pending Scans */}
-        <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-zinc-400">
-              Pending
-            </CardTitle>
-            <Clock className="w-4 h-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-zinc-100">{stamps.pending}</div>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Recent Activity */}
-      <h2 className="text-xl font-bold text-zinc-100 mt-8 mb-4 flex items-center gap-2">
-        <Activity className="w-5 h-5 text-primary" />
-        Recent Activity
-      </h2>
-      <div className="grid gap-4 md:grid-cols-1">
-        <Card className="bg-zinc-900 border-zinc-800 shadow-sm col-span-1">
-          <CardContent className="p-0">
-            {recentActivity.length > 0 ? (
-              <div className="divide-y divide-zinc-800">
-                {recentActivity.map((activity: any) => (
-                  <div
-                    key={activity.id}
-                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
-                        <Coffee className="h-5 w-5 text-primary" />
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Recent Activity */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
+            <Activity className="w-5 h-5 text-primary" />
+            Recent Activity
+          </h2>
+          <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
+            <CardContent className="p-0 max-h-[400px] overflow-y-auto">
+              {recentActivity.length > 0 ? (
+                <div className="divide-y divide-zinc-800">
+                  {recentActivity.map((activity: any) => (
+                    <div
+                      key={activity.id}
+                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                          <Coffee className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-zinc-100">
+                            {activity.username || "Guest User"}
+                          </p>
+                          <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
+                            <Clock className="w-3 h-3" />
+                            {activity.timestamp ? formatDate(activity.timestamp) : "Recently"}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-zinc-100">
-                          {activity.username || "Guest User"}
-                        </p>
-                        <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
-                          <Clock className="w-3 h-3" />
-                          {activity.timestamp ? formatDate(activity.timestamp) : "Recently"}
-                        </p>
+                      <div className="mt-3 sm:mt-0 flex items-center gap-2">
+                        <Badge
+                          className={cn(
+                            "capitalize px-2.5 py-0.5",
+                            activity.status === "approved" && "bg-emerald-500/20 text-emerald-500 border-emerald-500/30",
+                            activity.status === "pending" && "bg-yellow-500/20 text-yellow-500 border-yellow-500/30",
+                            activity.status === "rejected" && "bg-red-500/20 text-red-500 border-red-500/30",
+                          )}
+                          variant="outline"
+                        >
+                          {activity.status}
+                        </Badge>
                       </div>
                     </div>
-                    <div className="mt-3 sm:mt-0 flex items-center gap-2">
-                      <Badge
-                        className={cn(
-                          "capitalize px-2.5 py-0.5",
-                          activity.status === "approved" && "bg-emerald-500/20 text-emerald-500 border-emerald-500/30",
-                          activity.status === "pending" && "bg-yellow-500/20 text-yellow-500 border-yellow-500/30",
-                          activity.status === "rejected" && "bg-red-500/20 text-red-500 border-red-500/30",
-                        )}
-                        variant="outline"
-                      >
-                        {activity.status}
-                      </Badge>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-zinc-500">
+                  No recent activity found.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Top Loyal Customers */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
+            <Award className="w-5 h-5 text-yellow-500" />
+            Top Loyal Customers
+          </h2>
+          <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
+            <CardContent className="p-0 max-h-[400px] overflow-y-auto">
+              {topCustomers?.length > 0 ? (
+                <div className="divide-y divide-zinc-800">
+                  {topCustomers.map((customer: any, index: number) => (
+                    <div
+                      key={customer.id}
+                      className="flex items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 shrink-0 text-yellow-500 font-bold">
+                          #{index + 1}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-zinc-100">
+                            {customer.username}
+                          </p>
+                          <p className="text-xs text-zinc-500 mt-0.5">
+                            Loyal Member
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30 px-2.5 py-0.5">
+                          {customer.stamps} {customer.stamps === 1 ? "Stamp" : "Stamps"}
+                        </Badge>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-8 text-center text-zinc-500">
-                No recent activity found.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-zinc-500">
+                  No top customers found.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
