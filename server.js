@@ -1,23 +1,28 @@
-const { createServer } = require('http');
-const { parse } = require('url');
-const path = require('path');
+const { createServer } = require("http");
+const { parse } = require("url");
+const path = require("path");
 
 // Diagnostic logging to stdout (captured by iisnode)
-console.log('--- iisnode diagnostic info ---');
-console.log('Current __dirname:', __dirname);
-console.log('Working directory:', process.cwd());
+console.log("--- iisnode diagnostic info ---");
+console.log("Current __dirname:", __dirname);
+console.log("Working directory:", process.cwd());
 
 let next;
 try {
   // Try finding next in the local node_modules
-  const nextModulePath = path.resolve(__dirname, 'node_modules', 'next');
-  console.log('Attempting to require next from:', nextModulePath);
+  const nextModulePath = path.resolve(__dirname, "node_modules", "next");
+  console.log("Attempting to require next from:", nextModulePath);
   next = require(nextModulePath);
   console.log('Successfully loaded "next" module');
 } catch (e) {
   console.error('CRITICAL ERROR: Could not find "next" module.');
-  console.error('Search path tried:', path.resolve(__dirname, 'node_modules', 'next'));
-  console.error('Make sure "next" is in your node_modules folder and you have run npm install or bun install on the server.');
+  console.error(
+    "Search path tried:",
+    path.resolve(__dirname, "node_modules", "next"),
+  );
+  console.error(
+    'Make sure "next" is in your node_modules folder and you have run npm install or bun install on the server.',
+  );
   throw e;
 }
 

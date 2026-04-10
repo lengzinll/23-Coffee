@@ -26,7 +26,8 @@ export type ApiScanWithUser = {
 
 /** WebSocket messaging protocol */
 export type WebSocketMessage =
-  | { type: "SCAN_UPDATED"; scan: ApiScan };
+  | { type: "SCAN_UPDATED"; scan: ApiScan }
+  | { type: "REWARD_EARNED"; username: string; totalStamps: number };
 
 // ── Error types ────────────────────────────────────────────────────────────
 

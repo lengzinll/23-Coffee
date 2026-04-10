@@ -53,16 +53,16 @@ export default function DashboardLayout({
   }, []);
 
   const allLinks = [
-    { href: "/dashboard", label: "Overview", icon: ClipboardList, roles: ["admin"] },
+    { href: "/dashboard", label: "ទិដ្ឋភាពទូទៅ", icon: ClipboardList, roles: ["admin"] },
     {
       href: "/dashboard/stamps",
-      label: "Stamps",
+      label: "ត្រាសន្សំពិន្ទុ",
       icon: ClipboardList,
       roles: ["admin", "user"],
     },
-    { href: "/dashboard/users", label: "System Users", icon: Users, roles: ["admin"] },
-    { href: "/dashboard/setting", label: "Settings", icon: Settings, roles: ["admin"] },
-    { href: "/dashboard/profile", label: "Profile", icon: UserIcon, roles: ["user"] },
+    { href: "/dashboard/users", label: "អ្នកប្រើប្រាស់ប្រព័ន្ធ", icon: Users, roles: ["admin"] },
+    { href: "/dashboard/setting", label: "ការកំណត់", icon: Settings, roles: ["admin"] },
+    { href: "/dashboard/profile", label: "គណនីផ្ទាល់ខ្លួន", icon: UserIcon, roles: ["user"] },
   ];
 
   const links = useMemo(() => {
@@ -142,15 +142,15 @@ export default function DashboardLayout({
                 className="w-full cursor-pointer justify-start gap-3 px-3 py-2.5 text-sm text-primary hover:text-primary/90 hover:bg-primary/10"
               >
                 <LogOut className="h-4 w-4" />
-                Log Out
+                ចាកចេញ
               </Button>
             </PopoverTrigger>
 
             <PopoverContent className="w-72 p-4 space-y-4  bg-primary/10 border border-primary/30 text-white">
               <div className="space-y-1">
-                <h4 className="font-medium text-primary">Log out?</h4>
+                <h4 className="font-medium text-primary">ចាកចេញទេ?</h4>
                 <p className="text-sm">
-                  You&apos;ll need to sign in again to access the dashboard.
+                  លោកអ្នកនឹងត្រូវចូលគណនីម្តងទៀត ដើម្បីចូលទៅកាន់ផ្ទាំងគ្រប់គ្រង។
                 </p>
               </div>
 
@@ -161,7 +161,7 @@ export default function DashboardLayout({
                   size="sm"
                   onClick={handleLogout}
                 >
-                  Log Out
+                  ចាកចេញ
                 </Button>
               </div>
             </PopoverContent>
@@ -173,7 +173,7 @@ export default function DashboardLayout({
 
   const [open, setOpen] = useState(false);
 
-  if (isLoading) return <LoadingScreen message="Checking authorization..." />;
+  if (isLoading) return <LoadingScreen message="កំពុងពិនិត្យសិទ្ធិអនុញ្ញាត..." />;
 
   return (
     <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col md:flex-row overflow-hidden">
@@ -197,7 +197,7 @@ export default function DashboardLayout({
           </SheetTrigger>
           <SheetContent side="left" className="w-72 bg-zinc-900 border-zinc-800 p-4">
             <SheetHeader className="mb-6">
-              <SheetTitle className="text-left">Navigation</SheetTitle>
+              <SheetTitle className="text-left">ការរុករក</SheetTitle>
             </SheetHeader>
             <NavContent mobile onItemClick={() => setOpen(false)} />
           </SheetContent>

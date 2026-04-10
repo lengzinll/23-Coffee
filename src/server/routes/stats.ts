@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db } from "../../db";
-import { user, scanHistory } from "../../db/schema";
+import { user, scanHistory, systemSettings } from "../../db/schema";
 import { count, eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -50,7 +50,7 @@ const app = new Hono().get("/", zValidator("query", querySchema), async (c) => {
             .from(user)
             .where(userDateFilters.length > 0 ? and(...userDateFilters) : undefined);
 
-        const [pending, approved, rejected, activeCustomers, returningCustomersResult, topCustomers] = await Promise.all([
+        const [pending, approved, rejected, activeCustomers, returningCustomersResult, allCustomerStamps, settingsRes] = await Promise.all([
             db
                 .select({ count: count() })
                 .from(scanHistory)
@@ -85,11 +85,44 @@ const app = new Hono().get("/", zValidator("query", querySchema), async (c) => {
                 })
                 .from(scanHistory)
                 .innerJoin(user, eq(scanHistory.user_id, user.id))
-                .where(and(eq(scanHistory.status, "approved"), ...dateFilters))
-                .groupBy(user.id, user.username)
-                .orderBy(desc(count(scanHistory.id)))
-                .limit(5)
+                .where(and(eq(scanHistory.status, "approved"), eq(user.role, "user")))
+                .groupBy(user.id, user.username),
+            db
+                .select()
+                .from(systemSettings)
+                .where(eq(systemSettings.key, "STAMPS_PER_CYCLE"))
+                .get()
         ]);
+
+        const cycleLength = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
+
+        const topCustomers = allCustomerStamps
+            .map(c => ({
+                 ...c,
+                 remainder: c.stamps > 0 && c.stamps % cycleLength === 0 ? cycleLength : c.stamps % cycleLength,
+            }))
+            .sort((a, b) => {
+                 if (a.remainder !== b.remainder) {
+                      return b.remainder - a.remainder; // Highest remainder first (closest to completion)
+                 }
+                 return b.stamps - a.stamps; // Tie-breaker: total stamps
+            })
+            .slice(0, 5)
+            .map(c => ({
+                 id: c.id,
+                 username: c.username,
+                 stamps: c.stamps,
+                 remainder: c.remainder
+            }));
+
+        const nearlyCompleteCustomers = allCustomerStamps
+            .filter(c => c.stamps > 0 && c.stamps % cycleLength === 0)
+            .map(c => ({
+                 id: c.id,
+                 username: c.username,
+                 stamps: c.stamps,
+                 remainder: cycleLength
+            }));
 
         const recentActivity = await db
             .select({
@@ -124,6 +157,8 @@ const app = new Hono().get("/", zValidator("query", querySchema), async (c) => {
                 },
                 recentActivity: recentActivity,
                 topCustomers: topCustomers,
+                nearlyCompleteCustomers: nearlyCompleteCustomers,
+                cycleLength: cycleLength,
             },
         });
     } catch (error) {

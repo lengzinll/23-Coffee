@@ -27,7 +27,7 @@ async function loginFetcher(
   const body = await res.json();
 
   if (!res.ok) {
-    throw new Error(body.message || "Invalid username or password");
+    throw new Error(body.message || "ឈ្មោះអ្នកប្រើប្រាស់ ឬ ពាក្យសម្ងាត់មិនត្រឹមត្រូវ");
   }
 
   return body;
@@ -35,7 +35,7 @@ async function loginFetcher(
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div>កំពុងផ្ទុក...</div>}>
       <LoginContent />
     </Suspense>
   );
@@ -82,7 +82,7 @@ function LoginContent() {
 
       {isRegistered && (
         <div className="mb-6 w-full max-w-md rounded-md bg-emerald-950/40 border border-emerald-800/50 p-4 text-center text-sm text-emerald-400 animate-in fade-in slide-in-from-top-4 duration-500">
-          Account created successfully! You can now sign in.
+          បានបង្កើតគណនីដោយជោគជ័យ! លោកអ្នកអាចចូលគណនីបានឥឡូវនេះ។
         </div>
       )}
 
@@ -98,17 +98,17 @@ function LoginContent() {
         </div>
         <div className="h-px w-12 bg-primary/30 mb-3" />
         <p className="text-[10px] text-primary-foreground  uppercase tracking-[0.3em] font-black opacity-80">
-          Admin Dashboard
+          ផ្ទាំងគ្រប់គ្រង
         </p>
       </div>
 
       <Card className="w-full max-w-md bg-zinc-900/80 backdrop-blur-sm border-zinc-800/50 shadow-2xl shadow-black/40">
         <CardHeader className="space-y-1 pb-6 text-center">
           <CardTitle className="text-2xl font-bold text-primary">
-            Sign In
+            ចូលគណនី
           </CardTitle>
           <CardDescription className="text-primary-foreground">
-            Enter your credentials to access the dashboard
+            បញ្ចូលព័ត៌មានលម្អិតរបស់អ្នកដើម្បីចូលផ្ទាំងគ្រប់គ្រង
           </CardDescription>
         </CardHeader>
 
@@ -116,12 +116,12 @@ function LoginContent() {
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="username" className="text-zinc-200">
-                Username
+                ឈ្មោះអ្នកប្រើប្រាស់
               </Label>
               <Input
                 id="username"
                 type="text"
-                placeholder="admin or your username"
+                placeholder="អ្នកគ្រប់គ្រង ឬ ឈ្មោះអ្នកប្រើប្រាស់របស់អ្នក"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="bg-zinc-800/60 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-primary/50 focus-visible:border-primary/40 transition-colors"
@@ -133,7 +133,7 @@ function LoginContent() {
 
             <div className="space-y-2">
               <Label htmlFor="password" className="text-zinc-200">
-                Password
+                ពាក្យសម្ងាត់
               </Label>
               <Input
                 id="password"
@@ -159,15 +159,15 @@ function LoginContent() {
               disabled={isMutating}
               size="lg"
             >
-              {isMutating ? "Signing in..." : "Sign In"}
+              {isMutating ? "កំពុងចូលគណនី..." : "ចូលគណនី"}
             </Button>
           </form>
 
           <div className="mt-8 text-center space-y-4">
             <p className="text-sm text-zinc-400">
-              Don&apos;t have an account?{" "}
+              មិនទាន់មានគណនីមែនទេ?{" "}
               <Link href="/register" className="text-primary hover:underline">
-                Sign Up
+                ចុះឈ្មោះ
               </Link>
             </p>
 
@@ -180,7 +180,7 @@ function LoginContent() {
             >
               <Link href="/">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Home
+                ត្រឡប់ទៅទំព័រដើម
               </Link>
             </Button>
           </div>
@@ -188,7 +188,7 @@ function LoginContent() {
       </Card>
 
       <p className="mt-8 text-xs text-primary-foreground">
-        © {new Date().getFullYear()} Next Play Live • Admin Access Only
+        © {new Date().getFullYear()} Next Play Live • សម្រាប់តែអ្នកគ្រប់គ្រងប៉ុណ្ណោះ
       </p>
     </div>
   );

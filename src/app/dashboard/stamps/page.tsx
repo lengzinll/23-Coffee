@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   Coffee,
   Trash2,
+  Undo2,
+  X,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
@@ -57,13 +59,16 @@ const UserStampCard = ({
   STAMPS_PER_CYCLE: number;
 }) => {
   const approvedStamps = stamps.filter((s) => s.status === "approved");
-  const displayCount =
-    approvedStamps.length > 0 && approvedStamps.length % STAMPS_PER_CYCLE === 0
-      ? STAMPS_PER_CYCLE
-      : approvedStamps.length % STAMPS_PER_CYCLE;
+  const redeemedCount = stamps.filter((s) => s.status === "redeemed").length;
+  const completedCycles = Math.floor(approvedStamps.length / STAMPS_PER_CYCLE);
+  // A reward is pending if there are more completed cycles than redemptions
+  const hasUnredeemedReward = completedCycles > redeemedCount;
 
-  const isFull =
-    approvedStamps.length > 0 && approvedStamps.length % STAMPS_PER_CYCLE === 0;
+  const displayCount = hasUnredeemedReward
+    ? STAMPS_PER_CYCLE
+    : approvedStamps.length % STAMPS_PER_CYCLE;
+
+  const isFull = hasUnredeemedReward;
 
   return (
     <div className="flex flex-col items-center justify-center py-6 px-1 w-full translate-y-[-20px]">
@@ -212,34 +217,20 @@ const UserStampCard = ({
             <div className="flex justify-between items-center px-1 min-[420px]:px-4">
               {[3, 4, 5].map((i) => {
                 const isFilled = i < displayCount;
-                const isLast = i === 5;
                 return (
                   <div
                     key={i}
                     className={cn(
                       "w-[13vw] max-w-[55px] aspect-square rounded-full border-[1.5px] border-[#dcd3c1] flex items-center justify-center relative",
-                      isFilled
-                        ? isLast
-                          ? "bg-[#dcd3c1]"
-                          : "bg-[#dcd3c1]/20"
-                        : isLast
-                          ? "bg-[#dcd3c1]"
-                          : "bg-transparent",
+                      isFilled ? "bg-[#dcd3c1]" : "bg-transparent",
                     )}
                   >
                     {isFilled ? (
                       <img
                         src="/23_coffee.png"
-                        className={cn(
-                          "w-full h-full object-contain p-0 drop-shadow-md scale-[1.35]",
-                          isLast && "brightness-50",
-                        )}
+                        className="w-full h-full object-contain p-0 drop-shadow-md scale-[1.35]"
                         alt="Stamp"
                       />
-                    ) : isLast ? (
-                      <span className="text-[#3c3532] text-[10px] font-black uppercase tracking-tight">
-                        Free
-                      </span>
                     ) : (
                       <span className="text-[#dcd3c1]/60 text-xs font-black">
                         {i + 1}
@@ -251,23 +242,36 @@ const UserStampCard = ({
             </div>
           </div>
 
-          {/* Footer Text */}
+          {/* Dynamic Progress Footer */}
           <div className="text-center px-2 min-[420px]:px-4 pb-1">
-            <p className="text-[#dcd3c1]/60 text-[8px] min-[420px]:text-[10px] leading-[1.2] uppercase tracking-[0.05em] line-clamp-2 italic drop-shadow-sm">
-              ប្រមូលត្រាឱ្យបាន {STAMPS_PER_CYCLE} ដើម្បីទទួលបានកាហ្វេ ១
-              កែវឥតគិតថ្លៃ។
+            <p className="text-[#dcd3c1] text-[11px] min-[420px]:text-[13px] leading-[1.2] uppercase font-black tracking-[0.05em] italic drop-shadow-sm">
+              {isFull ? (
+                <span className="text-emerald-400">
+                  រួចរាល់ហើយ! កាហ្វេបន្ទាប់របស់អ្នកគឺឥតគិតថ្លៃ! ☕️
+                </span>
+              ) : (
+                <>
+                  ប្រមូលត្រាឱ្យបាន{" "}
+                  {STAMPS_PER_CYCLE -
+                    (approvedStamps.length % STAMPS_PER_CYCLE === 0 && approvedStamps.length > 0
+                      ? 0
+                      : approvedStamps.length % STAMPS_PER_CYCLE)}{" "}
+                  ទៀត ដើម្បីទទួលបានកាហ្វេ ១ កែវឥតគិតថ្លៃ។
+                </>
+              )}
             </p>
           </div>
         </div>
 
-        {/* Status indicator overlay for 6/6 */}
-        {isFull && (
-          <div className="absolute top-2 right-2 rotate-12 z-20">
-            <Badge className="bg-[#dcd3c1] text-[#3c3532] border-none font-black text-[10px] shadow-lg animate-bounce px-3">
-              READY! ☕️
+        {/* Reward Status Overlay for Full Cycle */}
+        {/* {isFull && (
+          <div className="absolute top-7 right-1 rotate-13 z-20">
+            <Badge className="bg-emerald-500 text-white border-none font-black text-[12px] shadow-[0_0_20px_rgba(16,185,129,0.4)] px-4 py-1.5 flex items-center gap-1">
+              <Gift className="h-3 w-3" />
+              NEXT CUP FREE! ☕️
             </Badge>
           </div>
-        )}
+        )} */}
       </div>
 
       {/* Stats beneath card */}
@@ -275,7 +279,7 @@ const UserStampCard = ({
         <div className="flex items-center gap-8 bg-[#3c3532]/30 px-6 py-3 rounded-2xl border border-[#dcd3c1]/10">
           <div className="flex flex-col items-center">
             <span className="text-[#dcd3c1]/50 text-[9px] uppercase font-bold tracking-widest">
-              Total Earned
+              ទទួលបានសរុប
             </span>
             <span className="text-lg font-black text-[#dcd3c1]">
               {approvedStamps.length}
@@ -284,7 +288,7 @@ const UserStampCard = ({
           <div className="w-px h-8 bg-[#dcd3c1]/10" />
           <div className="flex flex-col items-center">
             <span className="text-[#dcd3c1]/50 text-[9px] uppercase font-bold tracking-widest">
-              Rewards Given
+              រង្វាន់ដែលទទួលបាន
             </span>
             <span className="text-lg font-black text-[#dcd3c1] drop-shadow-[0_0_8px_rgba(220,211,193,0.3)]">
               {Math.floor(approvedStamps.length / STAMPS_PER_CYCLE)}
@@ -354,6 +358,7 @@ export default function StampsPage() {
   const [mounted, setMounted] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRedeeming, setIsRedeeming] = useState(false);
 
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -363,6 +368,32 @@ export default function StampsPage() {
   } | null>(null);
   const [stampToDelete, setStampToDelete] = useState<number | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedUserForRedeem, setSelectedUserForRedeem] = useState<{
+    id: number;
+    username: string;
+  } | null>(null);
+  const [isRedeemDialogOpen, setIsRedeemDialogOpen] = useState(false);
+  const [rewardAlert, setRewardAlert] = useState<{ username: string; totalStamps: number } | null>(null);
+
+  // WebSocket: admin listens for REWARD_EARNED events
+  useEffect(() => {
+    if (currentUser?.role !== "admin") return;
+
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${protocol}://${window.location.host}/api/ws`);
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "REWARD_EARNED") {
+          setRewardAlert({ username: msg.username, totalStamps: msg.totalStamps });
+          mutate(); // refresh the list too
+        }
+      } catch {}
+    };
+
+    return () => ws.close();
+  }, [currentUser?.role, mutate]);
 
   const handleManualAddClick = (userId: number, username: string) => {
     setSelectedUserForStamp({ id: userId, username });
@@ -380,22 +411,50 @@ export default function StampsPage() {
 
       const result = await res.json();
       if (res.ok && result.success === true) {
-        toast.success(`Stamp added for ${selectedUserForStamp.username}`);
+        toast.success(`បានបន្ថែមត្រាសម្រាប់ ${selectedUserForStamp.username}`);
         mutate(); // Refresh the list
       } else {
         const errorMsg =
-          result.success === false ? result.message : "Failed to add stamp";
+          result.success === false ? result.message : "ការបន្ថែមតែមបរាជ័យ";
         toast.error(errorMsg);
       }
     } catch (err) {
       console.error(err);
-      toast.error("An error occurred while adding the stamp");
+      toast.error("មានកំហុសមួយបានកើតឡើងក្នុងអំឡុងពេលបន្ថែមតែម");
     } finally {
       setIsAdding(false);
       setIsDialogOpen(false);
       setSelectedUserForStamp(null);
     }
   }, [isAdding, mutate, selectedUserForStamp]);
+
+  const handleRedeemReward = useCallback(async () => {
+    if (isRedeeming || !selectedUserForRedeem) return;
+
+    setIsRedeeming(true);
+    try {
+      const res = await rpc.scan.redeem.$post({
+        json: { userId: selectedUserForRedeem.id },
+      });
+
+      const result = await res.json();
+      if (res.ok && result.success === true) {
+        toast.success(`បានប្រគល់រង្វាន់ឥតគិតថ្លៃឲ្យ ${selectedUserForRedeem.username} ✓`);
+        mutate();
+      } else {
+        const errorMsg =
+          result.success === false ? result.message : "ការប្រគល់រង្វាន់បរាជ័យ";
+        toast.error(errorMsg);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("មានកំហុសមួយបានកើតឡើង");
+    } finally {
+      setIsRedeeming(false);
+      setIsRedeemDialogOpen(false);
+      setSelectedUserForRedeem(null);
+    }
+  }, [isRedeeming, mutate, selectedUserForRedeem]);
 
   const handleDeleteStamp = useCallback(
     async (id: number) => {
@@ -409,18 +468,16 @@ export default function StampsPage() {
 
         const result = await res.json();
         if (res.ok && result.success === true) {
-          toast.success("Stamp deleted successfully");
+          toast.success("លុបត្រាបានសម្រេច");
           mutate(); // Refresh the list
         } else {
           const errorMsg =
-            result.success === false
-              ? result.message
-              : "Failed to delete stamp";
+            result.success === false ? result.message : "ការលុបត្រាបានបរាជ័យ";
           toast.error(errorMsg);
         }
       } catch (err) {
         console.error(err);
-        toast.error("An error occurred while deleting the stamp");
+        toast.error("មានកំហុសមួយបានកើតឡើងក្នុងអំឡុងពេលលុបត្រា");
       } finally {
         setIsDeleting(false);
         setStampToDelete(null);
@@ -519,29 +576,81 @@ export default function StampsPage() {
   if (error || usersError || settingsError)
     return (
       <div className="p-6 text-destructive">
-        Error: {error?.message || usersError?.message || settingsError?.message}
+        មានបញ្ហា៖{" "}
+        {error?.message || usersError?.message || settingsError?.message}
       </div>
     );
   if (isLoading || isUsersLoading || isSettingsLoading)
-    return <LoadingScreen message="Fetching stamp history..." />;
+    return <LoadingScreen message="កំពុងទាញយកប្រវត្តិនៃការសន្សំតែម..." />;
   if (!mounted) return null;
 
   return (
     <div className="space-y-6 pb-20">
+
+      {/* ── Full-screen Reward Alert Overlay ── */}
+      {rewardAlert && (
+        <div
+          className="fixed inset-0 z-9999 flex items-center justify-center p-4"
+          onClick={() => setRewardAlert(null)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300" />
+
+          {/* Pulsing glow rings */}
+          <div className="absolute w-[420px] h-[420px] rounded-full bg-emerald-500/10 animate-ping" />
+          <div className="absolute w-[320px] h-[320px] rounded-full bg-emerald-500/15 animate-ping [animation-delay:150ms]" />
+          <div className="absolute w-[220px] h-[220px] rounded-full bg-emerald-500/20 animate-ping [animation-delay:300ms]" />
+
+          {/* Card */}
+          <div
+            className="relative z-10 bg-[#1a1a1a] border-2 border-emerald-500/60 rounded-3xl p-8 max-w-sm w-full text-center shadow-[0_0_80px_rgba(16,185,129,0.4)] animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-300 transition-colors"
+              onClick={() => setRewardAlert(null)}
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-400/50 flex items-center justify-center mx-auto mb-5">
+              <Coffee className="h-10 w-10 text-emerald-400" />
+            </div>
+
+            <h2 className="text-2xl font-black text-emerald-400 mb-1">
+              រង្វាន់ត្រូវប្រគល់! ☕️
+            </h2>
+            <p className="text-zinc-200 text-lg font-bold mb-1">
+              {rewardAlert.username}
+            </p>
+            <p className="text-zinc-400 text-sm mb-6">
+              ប្រមូលបាន {rewardAlert.totalStamps} ត្រាហើយ! កាហ្វេបន្ទាប់របស់អ្នកគឺឥតគិតថ្លៃ។
+            </p>
+
+            <Button
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black h-12 text-base rounded-xl gap-2 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+              onClick={() => setRewardAlert(null)}
+            >
+              <CheckCircle2 className="h-5 w-5" />
+              យល់ត្រាប់ហើយ
+            </Button>
+          </div>
+        </div>
+      )}
       {currentUser?.role === "admin" && (
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-2">
           <div>
-            <h1 className="text-2xl font-bold text-primary">Customer Stamps</h1>
+            <h1 className="text-2xl font-bold text-primary">ត្រារបស់អតិថិជន</h1>
             <p className="text-sm text-zinc-400 mt-1">
-              Track customer progress. {STAMPS_PER_CYCLE} stamps = 1 free
-              coffee.
+              តាមដានដំណើរការរបស់អតិថិជន។ ត្រាចំនួន {STAMPS_PER_CYCLE} = កាហ្វេ ១
+              កែវឥតគិតថ្លៃ។
             </p>
           </div>
           <div className="flex items-center gap-4 w-full">
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input
-                placeholder="Search customers..."
+                placeholder="ស្វែងរកអតិថិជន..."
                 className="h-10 pl-10 bg-zinc-900 border-zinc-800 text-zinc-200"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -556,16 +665,21 @@ export default function StampsPage() {
           <div className="text-center py-20 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-2xl">
             <UserIcon className="h-10 w-10 text-zinc-600 mx-auto mb-3" />
             <p className="text-zinc-500">
-              No customers found matching your criteria.
+              រកមិនឃើញអតិថិជនដូចនឹងការស្វែងរករបស់អ្នកទេ។
             </p>
           </div>
         ) : currentUser?.role === "admin" ? (
           groupedData.map((group, index) => {
             const userId = group.user?.id || 0;
             const isExpanded = expandedUsers[userId];
+            const approvedStamps = group.stamps.filter((s) => s.status === "approved");
+            const redeemedCount = group.stamps.filter((s) => s.status === "redeemed").length;
             const totalStamps = group.stamps.length;
-            const currentCycleCount = totalStamps % STAMPS_PER_CYCLE;
-            const completedCycles = Math.floor(totalStamps / STAMPS_PER_CYCLE);
+            const completedCycles = Math.floor(approvedStamps.length / STAMPS_PER_CYCLE);
+            const hasUnredeemedReward = completedCycles > redeemedCount;
+            const currentCycleCount = hasUnredeemedReward
+              ? STAMPS_PER_CYCLE
+              : approvedStamps.length % STAMPS_PER_CYCLE;
 
             return (
               <Collapsible
@@ -574,64 +688,94 @@ export default function StampsPage() {
                 onOpenChange={(open) => onOpenChange(userId, open)}
                 className="w-full"
               >
-                <Card className="bg-zinc-900 gap-0 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-colors p-0!">
+                <Card className={cn(
+                  "bg-zinc-900 gap-0 border-zinc-800 overflow-hidden transition-colors p-0!",
+                  hasUnredeemedReward
+                    ? "border-emerald-500/40 hover:border-emerald-500/70"
+                    : "hover:border-zinc-700",
+                )}>
                   <CollapsibleTrigger asChild>
                     <CardHeader className="cursor-pointer select-none py-3 px-4 flex flex-row justify-between items-center gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-primary font-bold hidden sm:inline">
                           {index + 1}.
                         </span>
-                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
-                          <UserIcon className="h-5 w-5 text-primary" />
+                        <div className={cn(
+                          "h-9 w-9 rounded-full flex items-center justify-center border shrink-0",
+                          hasUnredeemedReward
+                            ? "bg-emerald-500/20 border-emerald-500/40"
+                            : "bg-primary/10 border-primary/20",
+                        )}>
+                          {hasUnredeemedReward ? (
+                            <Gift className="h-5 w-5 text-emerald-400" />
+                          ) : (
+                            <UserIcon className="h-5 w-5 text-primary" />
+                          )}
                         </div>
                         <div className="min-w-0">
                           <CardTitle className="text-base font-bold text-zinc-100 truncate">
-                            {group.user?.username || "Guest User"}
+                            {group.user?.username || "អ្នកប្រើប្រាស់ទូទៅ"}
                           </CardTitle>
                           <CardDescription className="flex items-center gap-2">
-                            <span className="flex items-center gap-1 text-[11px] text-zinc-500">
-                              <Clock className="h-2.5 w-2.5" />
-                              {group.user?.timestamp
-                                ? formatDate(group.user.timestamp)
-                                : "Long ago"}
-                            </span>
+                            {hasUnredeemedReward ? (
+                              <span className="flex items-center gap-1 text-[11px] text-emerald-400 font-bold">
+                                <Coffee className="h-2.5 w-2.5" />
+                                រង្វាន់ត្រូវប្រគល់!
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-[11px] text-zinc-500">
+                                <Clock className="h-2.5 w-2.5" />
+                                {group.user?.timestamp
+                                  ? formatDate(group.user.timestamp)
+                                  : "តាំងពីយូរ"}
+                              </span>
+                            )}
                           </CardDescription>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                        {hasUnredeemedReward && (
+                          <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-bold shrink-0">
+                            <Gift className="h-3.5 w-3.5 animate-bounce" />
+                            <span className="hidden sm:inline">ត្រូវប្រគល់!</span>
+                          </div>
+                        )}
                         <div className="flex flex-col items-end gap-1">
                           <div className="flex items-center gap-2">
-                            {completedCycles > 0 && (
-                              <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 font-bold text-[10px] h-5 py-0 px-1.5">
-                                <Gift className="h-2.5 w-2.5 mr-1" />
+                            {redeemedCount > 0 && (
+                              <Badge className="bg-zinc-700/50 text-zinc-400 border-zinc-600/30 font-bold text-[10px] h-5 py-0 px-1.5">
+                                <CheckCircle2 className="h-2.5 w-2.5 mr-1" />
                                 <span className="hidden xs:inline">
-                                  {completedCycles}{" "}
-                                  {completedCycles > 1 ? "Coffees" : "Coffee"}
+                                  {redeemedCount} ប្រើហើយ
                                 </span>
-                                <span className="xs:hidden">
-                                  {completedCycles}
-                                </span>
+                                <span className="xs:hidden">{redeemedCount}</span>
                               </Badge>
                             )}
                             <Badge
                               variant="outline"
                               className="bg-zinc-950/50 border-zinc-800 text-zinc-500 text-[10px] h-5 py-0 px-1.5 whitespace-nowrap"
                             >
-                              Total: {totalStamps}
+                              សរុប៖ {approvedStamps.length}
                             </Badge>
                           </div>
                           <div className="w-20 sm:w-32 h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-1">
                             <div
-                              className="h-full bg-primary transition-all duration-500"
+                              className={cn(
+                                "h-full transition-all duration-500",
+                                hasUnredeemedReward ? "bg-emerald-500" : "bg-primary",
+                              )}
                               style={{
                                 width: `${(currentCycleCount / STAMPS_PER_CYCLE) * 100}%`,
                               }}
                             />
                           </div>
-                          <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-bold mt-0.5">
+                          <span className={cn(
+                            "text-[9px] uppercase tracking-wider font-bold mt-0.5",
+                            hasUnredeemedReward ? "text-emerald-500" : "text-zinc-500",
+                          )}>
                             {currentCycleCount}/{STAMPS_PER_CYCLE}{" "}
-                            <span className="hidden xs:inline">next</span>
+                            <span className="hidden xs:inline">{hasUnredeemedReward ? "ឥតគិតថ្លៃ!" : "បន្ទាប់"}</span>
                           </span>
                         </div>
                         <div className="h-8 w-8 flex items-center justify-center text-zinc-600">
@@ -651,13 +795,14 @@ export default function StampsPage() {
                       {Array.from({
                         length: Math.max(
                           1,
-                          Math.ceil((totalStamps + 1) / STAMPS_PER_CYCLE),
+                          Math.ceil((approvedStamps.length + 1) / STAMPS_PER_CYCLE),
                         ),
                       })
                         .reverse()
                         .map((_, cycleIndex, arr) => {
                           const actualCycleIndex = arr.length - 1 - cycleIndex;
-                          const cycleStamps = [...group.stamps]
+                          // Only use approved stamps for slot display — redeemed records must NOT appear as slots
+                          const cycleStamps = [...approvedStamps]
                             .reverse()
                             .slice(
                               actualCycleIndex * STAMPS_PER_CYCLE,
@@ -666,20 +811,81 @@ export default function StampsPage() {
                           const isCycleComplete =
                             cycleStamps.length === STAMPS_PER_CYCLE;
 
+                          // Determine if this specific cycle has been redeemed
+                          // Cycles are ordered oldest→newest by actualCycleIndex
+                          // redeemedCount tells us how many cycles (from oldest) have been redeemed
+                          const isCycleRedeemed = isCycleComplete && actualCycleIndex < redeemedCount;
+                          const isCyclePendingRedemption = isCycleComplete && !isCycleRedeemed;
+
+                          // Get the specific redeemed record for this cycle so the admin can undo it
+                          const redeemedStampsSorted = group.stamps
+                            .filter((s) => s.status === "redeemed")
+                            .sort((a, b) => {
+                              const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                              const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                              return ta - tb; // oldest first
+                            });
+                          const cycleRedeemedStamp = isCycleRedeemed
+                            ? redeemedStampsSorted[actualCycleIndex]
+                            : null;
+
                           return (
                             <div key={actualCycleIndex} className="relative">
                               <div className="flex items-center gap-3 mb-4">
                                 <h4 className="text-sm font-bold text-zinc-500 uppercase tracking-tighter">
-                                  Cycle #{actualCycleIndex + 1}
+                                  ជុំទី {actualCycleIndex + 1}
                                 </h4>
-                                {isCycleComplete && (
-                                  <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase">
-                                    <CheckCircle2 className="h-3 w-3" />
-                                    Reward Earned
+                                {isCycleRedeemed && (
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400 uppercase">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      ប្រើហើយ ✓
+                                    </div>
+                                    {cycleRedeemedStamp && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 px-2 text-[10px] border-zinc-700 bg-zinc-800/50 hover:bg-zinc-800 hover:text-amber-400 text-zinc-400 gap-1.5 shadow-none transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setStampToDelete(cycleRedeemedStamp.id);
+                                          setIsDeleteDialogOpen(true);
+                                        }}
+                                      >
+                                        <Undo2 className="h-3 w-3" />
+                                        បោះបង់ការប្រើ
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                                {isCyclePendingRedemption && (
+                                  <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 uppercase animate-pulse">
+                                    <Gift className="h-3 w-3" />
+                                    រង្វាន់ត្រូវប្រគល់!
                                   </div>
                                 )}
                                 <div className="flex-1 h-px bg-zinc-800" />
                               </div>
+
+                              {/* Redeem button — shown above the grid for the pending cycle */}
+                              {isCyclePendingRedemption && (
+                                <div className="relative mb-4">
+                                  <span className="absolute inset-0 rounded-xl animate-ping bg-emerald-400 opacity-20 pointer-events-none" />
+                                  <Button
+                                    className="relative w-full bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-white font-black text-sm h-11 gap-2 shadow-[0_0_24px_rgba(16,185,129,0.5)] border border-emerald-400/40 transition-all duration-150 rounded-xl"
+                                    onClick={() => {
+                                      setSelectedUserForRedeem({
+                                        id: userId,
+                                        username: group.user?.username || "Guest",
+                                      });
+                                      setIsRedeemDialogOpen(true);
+                                    }}
+                                  >
+                                    <Coffee className="h-5 w-5" />
+                                    ប្រគល់កាហ្វេឥតគិតថ្លៃ ☕
+                                  </Button>
+                                </div>
+                              )}
 
                               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                                 {/* Show STAMPS_PER_CYCLE slots per cycle */}
@@ -711,18 +917,6 @@ export default function StampsPage() {
                                             "cursor-pointer hover:border-primary/50 hover:bg-primary/5",
                                         )}
                                       >
-                                        {slotIndex === STAMPS_PER_CYCLE - 1 && (
-                                          <div
-                                            className={cn(
-                                              "absolute top-4 right-4 transition-all duration-300 flex items-center gap-2 z-10",
-                                              stamp
-                                                ? "text-emerald-500 fill-emerald-500/20 animate-bounce"
-                                                : "text-zinc-800",
-                                            )}
-                                          >
-                                            <Badge>Free</Badge>
-                                          </div>
-                                        )}
                                         {stamp ? (
                                           <>
                                             {stamp.status === "approved" ? (
@@ -776,7 +970,7 @@ export default function StampsPage() {
                                               </span>
                                             </div>
                                             <span className="text-[10px] text-zinc-800 font-medium">
-                                              Locked
+                                              ចាក់សោ
                                             </span>
                                           </>
                                         )}
@@ -805,24 +999,58 @@ export default function StampsPage() {
         )}
       </div>
 
-      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Redeem Reward Dialog */}
+      <AlertDialog open={isRedeemDialogOpen} onOpenChange={setIsRedeemDialogOpen}>
         <AlertDialogContent className="bg-zinc-950 border-zinc-800">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-zinc-100 font-bold">
-              Manual Stamp Entry
+            <AlertDialogTitle className="text-zinc-100 font-bold flex items-center gap-2">
+              <Coffee className="h-5 w-5 text-emerald-400" />
+              ប្រគល់កាហ្វេឥតគិតថ្លៃ
             </AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-400">
-              Are you sure you want to manually add a stamp for{" "}
-              <span className="font-bold text-primary">
-                {selectedUserForStamp?.username}
-              </span>
-              ? This action cannot be undone and will add progress to their
-              coupon.
+              បញ្ជាក់ថាអ្នកបានប្រគល់កាហ្វេឥតគិតថ្លៃឲ្យ{" "}
+              <span className="font-bold text-emerald-400">
+                {selectedUserForRedeem?.username}
+              </span>{" "}
+              ហើយ? សកម្មភាពនេះនឹងកត់ត្រាការប្រើប្រាស់រង្វាន់ និងចាប់ផ្ដើមជុំថ្មី។
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-100">
-              Cancel
+              បោះបង់
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleRedeemReward();
+              }}
+              disabled={isRedeeming}
+              className="bg-emerald-600 text-white hover:bg-emerald-700 font-bold"
+            >
+              {isRedeeming ? "កំពុងដំណើរការ..." : "បញ្ជាក់ការប្រគល់ ✓"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <AlertDialogContent className="bg-zinc-950 border-zinc-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100 font-bold">
+              បន្ថែមត្រាដោយផ្ទាល់ដៃ
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              តើអ្នកពិតជាចង់បន្ថែមត្រាដោយផ្ទាល់ដៃសម្រាប់{" "}
+              <span className="font-bold text-primary">
+                {selectedUserForStamp?.username}
+              </span>
+              មែនទេ? សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ
+              ហើយវានឹងបន្ថែមវឌ្ឍនភាពទៅកាតសន្សំតែមរបស់ពួកគេ។
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-100">
+              បោះបង់
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
@@ -832,7 +1060,7 @@ export default function StampsPage() {
               disabled={isAdding}
               className="bg-primary text-black hover:bg-primary/90 font-bold"
             >
-              {isAdding ? "Loading..." : "Confirm"}
+              {isAdding ? "កំពុងដំណើរការ..." : "បញ្ជាក់"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -845,16 +1073,16 @@ export default function StampsPage() {
         <AlertDialogContent className="bg-zinc-950 border-zinc-800">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-zinc-100 font-bold">
-              Cancel Stamp
+              បោះបង់ការបន្ថែមត្រា
             </AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-400">
-              Are you sure you want to cancel this stamp? This will remove it
-              from the customer's history and reset this slot to empty.
+              តើអ្នកពិតជាចង់បញ្ចៀសការបន្ថែមត្រានេះមែនទេ?
+              វានឹងលុបពីប្រវត្តិអតិថិជន និងរៀបចំបែបរន្ធនេះឲ្យនៅទទេវិញ។
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-zinc-900 text-zinc-300 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-100">
-              Go Back
+              ថយក្រោយ
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
@@ -864,7 +1092,7 @@ export default function StampsPage() {
               disabled={isDeleting}
               className="bg-red-600 text-white hover:bg-red-700 font-bold"
             >
-              {isDeleting ? "Deleting..." : "Confirm Cancel"}
+              {isDeleting ? "កំពុងលុប..." : "បញ្ជាក់ការលុប"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

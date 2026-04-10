@@ -18,11 +18,11 @@ export default function ProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      toast.error("New passwords do not match");
+      toast.error("ពាក្យសម្ងាត់ថ្មីមិនដូចគ្នាទេ");
       return;
     }
     if (newPassword.length < 6) {
-      toast.error("New password must be at least 6 characters");
+      toast.error("ពាក្យសម្ងាត់ថ្មីត្រូវមានយ៉ាងហោចណាស់ ៦ តួអក្សរ");
       return;
     }
 
@@ -33,15 +33,15 @@ export default function ProfilePage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        toast.success("Password changed successfully");
+        toast.success("ផ្លាស់ប្តូរពាក្យសម្ងាត់បានសម្រេច");
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
       } else {
-        toast.error(data.message || "Failed to change password");
+        toast.error(data.message || "ការផ្លាស់ប្តូរពាក្យសម្ងាត់បរាជ័យ");
       }
     } catch (error) {
-      toast.error("An error occurred");
+      toast.error("មានកំហុសមួយបានកើតឡើង");
     } finally {
       setIsLoading(false);
     }
@@ -50,25 +50,25 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6 max-w-2xl mx-auto pt-4 pb-20">
       <div>
-        <h1 className="text-2xl font-bold text-[#dcd3c1]">My Profile</h1>
+        <h1 className="text-2xl font-bold text-[#dcd3c1]">គណនីផ្ទាល់ខ្លួនរបស់ខ្ញុំ</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          Manage your account settings and security.
+          គ្រប់គ្រងការកំណត់គណនី និងសុវត្ថិភាពរបស់អ្នក។
         </p>
       </div>
 
       <Card className="bg-[#3c3532]/30 border-[#dcd3c1]/10 text-zinc-100">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-[#dcd3c1]">
-            <Key className="w-5 h-5" /> Change Password
+            <Key className="w-5 h-5" /> ផ្លាស់ប្តូរពាក្យសម្ងាត់
           </CardTitle>
           <CardDescription className="text-[#dcd3c1]/60">
-            Ensure your account is using a long, random password to stay secure.
+            ត្រូវប្រាកដថាគណនីរបស់អ្នកប្រើប្រាស់ពាក្យសម្ងាត់វែង និងចៃដន្យដើម្បីរក្សាសុវត្ថិភាព។
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-[#dcd3c1]/80">Current Password</Label>
+              <Label className="text-[#dcd3c1]/80">ពាក្យសម្ងាត់បច្ចុប្បន្ន</Label>
               <Input
                 type="password"
                 value={currentPassword}
@@ -78,7 +78,7 @@ export default function ProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[#dcd3c1]/80">New Password</Label>
+              <Label className="text-[#dcd3c1]/80">ពាក្យសម្ងាត់ថ្មី</Label>
               <Input
                 type="password"
                 value={newPassword}
@@ -88,7 +88,7 @@ export default function ProfilePage() {
               />
             </div>
             <div className="space-y-2 mb-4">
-              <Label className="text-[#dcd3c1]/80">Confirm New Password</Label>
+              <Label className="text-[#dcd3c1]/80">បញ្ជាក់ពាក្យសម្ងាត់ថ្មី</Label>
               <Input
                 type="password"
                 value={confirmPassword}
@@ -104,7 +104,7 @@ export default function ProfilePage() {
               disabled={isLoading}
               className="bg-[#dcd3c1] text-[#3c3532] hover:bg-[#dcd3c1]/90 font-bold"
             >
-              {isLoading ? "Changing..." : "Update Password"}
+              {isLoading ? "កំពុងផ្លាស់ប្តូរ..." : "ផ្លាស់ប្តូរពាក្យសម្ងាត់"}
             </Button>
           </CardFooter>
         </form>

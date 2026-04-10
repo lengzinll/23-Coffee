@@ -12,7 +12,7 @@ export const user = sqliteTable("user", {
   ),
 });
 
-const statusEnum = ["pending", "approved", "rejected"] as const;
+const statusEnum = ["pending", "approved", "rejected", "redeemed"] as const;
 
 export const scanHistory = sqliteTable("scan_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
