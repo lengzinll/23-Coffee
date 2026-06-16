@@ -50,13 +50,15 @@ function LoginContent() {
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState("");
 
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
+
   const {
     trigger,
     isMutating,
     error: mutationError,
   } = useSWRMutation("/api/auth/login", loginFetcher, {
     onSuccess: () => {
-      router.push("/dashboard");
+      router.push(redirectTo);
       router.refresh();
     },
     onError: (err) => {

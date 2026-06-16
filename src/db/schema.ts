@@ -18,6 +18,7 @@ export const scanHistory = sqliteTable("scan_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   user_id: integer("user_id").references(() => user.id, { onDelete: "cascade" }),
   status: text("status", { enum: statusEnum }).notNull().default("pending"),
+  telegram_message_id: integer("telegram_message_id"),  // tracks the approval message to edit later
   timestamp: integer("timestamp", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),

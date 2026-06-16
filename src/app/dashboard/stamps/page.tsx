@@ -20,6 +20,7 @@ import {
   Trash2,
   Undo2,
   X,
+  QrCode,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import QRCode from "react-qr-code";
 
 const UserStampCard = ({
   user,
@@ -317,7 +319,7 @@ const usersFetcher = async (): Promise<ApiUser[]> => {
 const meFetcher = async () => {
   const res = await rpc.auth.me.$get();
   if (!res.ok) return null;
-  const result = await res.json();
+  const result = await res.json() as { success: boolean; user?: { id: number; username: string; role: string } };
   return result.success ? result.user : null;
 };
 
@@ -359,6 +361,12 @@ export default function StampsPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [approvingStampId, setApprovingStampId] = useState<number | null>(null);
+
+  // QR Code state
+  const [qrScanUrl, setQrScanUrl] = useState<string | null>(null);
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
 
   // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -387,13 +395,80 @@ export default function StampsPage() {
         const msg = JSON.parse(event.data);
         if (msg.type === "REWARD_EARNED") {
           setRewardAlert({ username: msg.username, totalStamps: msg.totalStamps });
-          mutate(); // refresh the list too
+          mutate();
         }
-      } catch {}
+        if (msg.type === "SCAN_UPDATED") {
+          mutate(); // refresh stamps list when Telegram approves/rejects
+        }
+      } catch { }
     };
 
     return () => ws.close();
   }, [currentUser?.role, mutate]);
+
+  // ── QR Code ─────────────────────────────────────────────────────────────────
+  const handleGenerateQr = useCallback(async () => {
+    if (isGeneratingQr) return;
+    setIsGeneratingQr(true);
+
+    try {
+      // Build the scan URL from the browser's actual origin — works on any domain
+      const scanUrl = `${window.location.origin}/scan`;
+      setQrScanUrl(scanUrl);
+      setIsQrModalOpen(true);
+    } catch {
+      toast.error("Failed to generate QR code");
+    } finally {
+      setIsGeneratingQr(false);
+    }
+  }, [isGeneratingQr]);
+
+  const handleCloseQr = useCallback(() => {
+    setIsQrModalOpen(false);
+  }, []);
+
+  const handleApproveStamp = useCallback(async (stampId: number, action: "approved" | "rejected") => {
+    if (approvingStampId !== null) return;
+    setApprovingStampId(stampId);
+    try {
+      const res = await fetch("/api/scan/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stampId, action }),
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        toast.success(action === "approved" ? "បានអនុម័តត្រា ✓" : "បានបដិសេធត្រា");
+        mutate();
+      } else {
+        toast.error(result.message || "ដំណើរការបរាជ័យ");
+      }
+    } catch {
+      toast.error("មានបញ្ហាក្នុងការភ្ជាប់");
+    } finally {
+      setApprovingStampId(null);
+    }
+  }, [approvingStampId, mutate]);
+
+  const handleDownloadQr = useCallback(async () => {
+    const posterEl = document.getElementById("qr-poster-download");
+    if (!posterEl || !qrScanUrl) return;
+
+    try {
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(posterEl, {
+        pixelRatio: 4,        // 4× → ~1280px wide, crisp for printing
+        cacheBust: true,
+        backgroundColor: "#f5f0e8",
+      });
+      const link = document.createElement("a");
+      link.download = "23coffee-stamp-qr.png";
+      link.href = dataUrl;
+      link.click();
+    } catch {
+      toast.error("Failed to download poster");
+    }
+  }, [qrScanUrl]);
 
   const handleManualAddClick = (userId: number, username: string) => {
     setSelectedUserForStamp({ id: userId, username });
@@ -405,18 +480,17 @@ export default function StampsPage() {
 
     setIsAdding(true);
     try {
-      const res = await rpc.scan.$post({
-        json: { userId: selectedUserForStamp.id },
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUserForStamp.id }),
       });
-
-      const result = await res.json();
+      const result = await res.json() as { success: boolean; message?: string };
       if (res.ok && result.success === true) {
         toast.success(`បានបន្ថែមត្រាសម្រាប់ ${selectedUserForStamp.username}`);
-        mutate(); // Refresh the list
+        mutate();
       } else {
-        const errorMsg =
-          result.success === false ? result.message : "ការបន្ថែមតែមបរាជ័យ";
-        toast.error(errorMsg);
+        toast.error(result.message || "ការបន្ថែមតែមបរាជ័យ");
       }
     } catch (err) {
       console.error(err);
@@ -437,14 +511,12 @@ export default function StampsPage() {
         json: { userId: selectedUserForRedeem.id },
       });
 
-      const result = await res.json();
+      const result = await res.json() as { success: boolean; message?: string };
       if (res.ok && result.success === true) {
         toast.success(`បានប្រគល់រង្វាន់ឥតគិតថ្លៃឲ្យ ${selectedUserForRedeem.username} ✓`);
         mutate();
       } else {
-        const errorMsg =
-          result.success === false ? result.message : "ការប្រគល់រង្វាន់បរាជ័យ";
-        toast.error(errorMsg);
+        toast.error(result.message || "ការប្រគល់រង្វាន់បរាជ័យ");
       }
     } catch (err) {
       console.error(err);
@@ -462,18 +534,14 @@ export default function StampsPage() {
 
       setIsDeleting(true);
       try {
-        const res = await rpc.scan[":id"].$delete({
-          param: { id: id.toString() },
-        });
+        const res = await fetch(`/api/scan/${id}`, { method: "DELETE" });
+        const result = await res.json() as { success: boolean; message?: string };
 
-        const result = await res.json();
         if (res.ok && result.success === true) {
           toast.success("លុបត្រាបានសម្រេច");
-          mutate(); // Refresh the list
+          mutate();
         } else {
-          const errorMsg =
-            result.success === false ? result.message : "ការលុបត្រាបានបរាជ័យ";
-          toast.error(errorMsg);
+          toast.error(result.message || "ការលុបត្រាបានបរាជ័យ");
         }
       } catch (err) {
         console.error(err);
@@ -646,7 +714,15 @@ export default function StampsPage() {
               កែវឥតគិតថ្លៃ។
             </p>
           </div>
-          <div className="flex items-center gap-4 w-full">
+          <div className="flex items-center gap-3 w-full lg:w-auto">
+            <Button
+              onClick={handleGenerateQr}
+              disabled={isGeneratingQr}
+              className="shrink-0 bg-amber-600 hover:bg-amber-500 text-white font-bold gap-2 h-10 px-4 rounded-lg shadow-lg shadow-amber-900/30"
+            >
+              <QrCode className="h-4 w-4" />
+              {isGeneratingQr ? "កំពុងបង្កើត..." : "បង្កើត QR"}
+            </Button>
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input
@@ -713,8 +789,14 @@ export default function StampsPage() {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <CardTitle className="text-base font-bold text-zinc-100 truncate">
+                          <CardTitle className="text-base font-bold text-zinc-100 truncate flex items-center gap-2">
                             {group.user?.username || "អ្នកប្រើប្រាស់ទូទៅ"}
+                            {group.stamps.filter(s => s.status === "pending").length > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full animate-pulse">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                                {group.stamps.filter(s => s.status === "pending").length} រង់ចាំ
+                              </span>
+                            )}
                           </CardTitle>
                           <CardDescription className="flex items-center gap-2">
                             {hasUnredeemedReward ? (
@@ -791,25 +873,69 @@ export default function StampsPage() {
 
                   <CollapsibleContent className="border-t border-zinc-800/50 bg-black/10 p-3 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
                     <div className="space-y-4">
+
+                      {/* ── Pending stamps section ── */}
+                      {(() => {
+                        const pendingStamps = group.stamps.filter(s => s.status === "pending");
+                        if (pendingStamps.length === 0) return null;
+                        return (
+                          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 space-y-2">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                              <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">
+                                រង់ចាំការអនុម័ត ({pendingStamps.length})
+                              </span>
+                            </div>
+                            {pendingStamps.map(stamp => (
+                              <div key={stamp.id} className="flex items-center justify-between gap-3 bg-zinc-900 rounded-lg px-3 py-2">
+                                <span className="text-[11px] text-zinc-400 tabular-nums">
+                                  {stamp.timestamp ? formatDate(stamp.timestamp) : "—"}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    disabled={approvingStampId === stamp.id}
+                                    onClick={() => handleApproveStamp(stamp.id, "approved")}
+                                    className="flex items-center gap-1 h-7 px-3 rounded-md bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-[11px] font-bold border border-emerald-500/30 transition-colors disabled:opacity-40"
+                                  >
+                                    {approvingStampId === stamp.id ? "..." : "✓ អនុម័ត"}
+                                  </button>
+                                  <button
+                                    disabled={approvingStampId === stamp.id}
+                                    onClick={() => handleApproveStamp(stamp.id, "rejected")}
+                                    className="flex items-center gap-1 h-7 px-3 rounded-md bg-red-600/20 hover:bg-red-600/40 text-red-400 text-[11px] font-bold border border-red-500/30 transition-colors disabled:opacity-40"
+                                  >
+                                    {approvingStampId === stamp.id ? "..." : "✕ បដិសេធ"}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+
                       {/* Group stamps into cycles of STAMPS_PER_CYCLE */}
-                      {Array.from({
-                        length: Math.max(
-                          1,
-                          Math.ceil((approvedStamps.length + 1) / STAMPS_PER_CYCLE),
-                        ),
-                      })
-                        .reverse()
-                        .map((_, cycleIndex, arr) => {
-                          const actualCycleIndex = arr.length - 1 - cycleIndex;
-                          // Only use approved stamps for slot display — redeemed records must NOT appear as slots
-                          const cycleStamps = [...approvedStamps]
-                            .reverse()
-                            .slice(
+                      {(() => {
+                        // Include both approved AND pending stamps in the display grid
+                        const activeStamps = group.stamps
+                          .filter((s) => s.status === "approved" || s.status === "pending")
+                          .sort((a, b) => {
+                            const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                            const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                            return ta - tb;
+                          });
+
+                        const cycleCount = Math.max(1, Math.ceil((activeStamps.length + 1) / STAMPS_PER_CYCLE));
+
+                        return Array.from({ length: cycleCount })
+                          .reverse()
+                          .map((_, cycleIndex) => {
+                            const actualCycleIndex = cycleCount - 1 - cycleIndex;
+                            const cycleStamps = activeStamps.slice(
                               actualCycleIndex * STAMPS_PER_CYCLE,
                               (actualCycleIndex + 1) * STAMPS_PER_CYCLE,
                             );
-                          const isCycleComplete =
-                            cycleStamps.length === STAMPS_PER_CYCLE;
+                            const cycleApproved = cycleStamps.filter(s => s.status === "approved");
+                            const isCycleComplete = cycleApproved.length === STAMPS_PER_CYCLE;
 
                           // Determine if this specific cycle has been redeemed
                           // Cycles are ordered oldest→newest by actualCycleIndex
@@ -898,13 +1024,13 @@ export default function StampsPage() {
                                         key={slotIndex}
                                         onClick={
                                           !stamp &&
-                                          currentUser?.role === "admin"
+                                            currentUser?.role === "admin"
                                             ? () =>
-                                                handleManualAddClick(
-                                                  userId,
-                                                  group.user?.username ||
-                                                    "Guest",
-                                                )
+                                              handleManualAddClick(
+                                                userId,
+                                                group.user?.username ||
+                                                "Guest",
+                                              )
                                             : undefined
                                         }
                                         className={cn(
@@ -913,8 +1039,8 @@ export default function StampsPage() {
                                             ? "bg-zinc-800/50 border-zinc-700 shadow-lg shadow-black/20"
                                             : "bg-transparent border-dashed border-zinc-800",
                                           !stamp &&
-                                            currentUser?.role === "admin" &&
-                                            "cursor-pointer hover:border-primary/50 hover:bg-primary/5",
+                                          currentUser?.role === "admin" &&
+                                          "cursor-pointer hover:border-primary/50 hover:bg-primary/5",
                                         )}
                                       >
                                         {stamp ? (
@@ -927,14 +1053,18 @@ export default function StampsPage() {
                                                   className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(245,158,11,0.7)] -rotate-12 group-hover:rotate-0 transition-transform duration-500 scale-[1.25]"
                                                 />
                                               </div>
+                                            ) : stamp.status === "pending" ? (
+                                              /* Pending in grid — simple indicator, actions are in the section above */
+                                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
+                                                <div className="h-5 w-5 rounded-full border-2 border-amber-500/50 border-t-amber-400 animate-spin" />
+                                                <span className="text-[8px] font-bold text-amber-500/70 uppercase tracking-wide">រង់ចាំ</span>
+                                              </div>
                                             ) : (
                                               <Badge
                                                 className={cn(
                                                   "capitalize",
-                                                  stamp.status === "pending" &&
-                                                    "bg-yellow-500 text-black",
                                                   stamp.status === "rejected" &&
-                                                    "bg-red-500 text-white",
+                                                  "bg-red-500 text-white",
                                                 )}
                                               >
                                                 {stamp.status}
@@ -981,7 +1111,8 @@ export default function StampsPage() {
                               </div>
                             </div>
                           );
-                        })}
+                        });
+                      })()}
                     </div>
                   </CollapsibleContent>
                 </Card>
@@ -1097,6 +1228,140 @@ export default function StampsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── QR Code Modal ── */}
+      {isQrModalOpen && qrScanUrl && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleCloseQr} />
+
+          {/* Modal card — scrollable on small screens */}
+          <div className="relative z-10 bg-zinc-900 border border-zinc-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl shadow-black/60 animate-in zoom-in-95 duration-200 overflow-y-auto max-h-[95dvh] flex flex-col gap-4">
+            {/* Close */}
+            <button className="absolute top-3 right-3 text-zinc-500 hover:text-zinc-200 transition-colors" onClick={handleCloseQr}>
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Header */}
+            <div className="text-center pt-1">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <QrCode className="h-5 w-5 text-amber-500" />
+                <h2 className="text-base font-black text-zinc-100">QR ត្រា · បោះពុម្ព</h2>
+              </div>
+              <p className="text-zinc-500 text-xs">ទាញយករូបភាព ហើយបោះពុម្ព ឬបង្ហោះ</p>
+            </div>
+
+            {/* ── Poster preview — scaled to fit the modal ── */}
+            <div className="flex justify-center">
+              <div style={{ transform: "scale(0.72)", transformOrigin: "top center", width: "360px", height: "460px", flexShrink: 0 }}>
+                <div
+                  id="qr-poster-download"
+                  style={{
+                    width: "360px",
+                    minHeight: "460px",
+                    background: "#f5f0e8",
+                    borderRadius: "16px",
+                    padding: "28px 28px 22px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    fontFamily: "'Kantumruy Pro', 'Segoe UI', sans-serif",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* Sparkle TL */}
+                  <svg style={{ position: "absolute", top: 14, left: 16, opacity: 0.5 }} width="30" height="30" viewBox="0 0 30 30" fill="none">
+                    <path d="M15 3L16.2 13L15 23L13.8 13Z" fill="#8B5E3C" />
+                    <path d="M3 15L13 16.2L23 15L13 13.8Z" fill="#8B5E3C" />
+                  </svg>
+                  {/* Sparkle TR */}
+                  <svg style={{ position: "absolute", top: 20, right: 20, opacity: 0.4 }} width="22" height="22" viewBox="0 0 22 22" fill="none">
+                    <path d="M11 1L12 9L11 17L10 9Z" fill="#6b3d1e" />
+                    <path d="M1 11L9 12L17 11L9 10Z" fill="#6b3d1e" />
+                  </svg>
+                  {/* Sparkle BR */}
+                  <svg style={{ position: "absolute", bottom: 50, right: 16, opacity: 0.3 }} width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <path d="M9 1L9.8 7L9 13L8.2 7Z" fill="#8B5E3C" />
+                    <path d="M1 9L7 9.8L13 9L7 8.2Z" fill="#8B5E3C" />
+                  </svg>
+
+                  {/* Brand */}
+                  <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.3em", textTransform: "uppercase", color: "#8B5E3C", marginBottom: "4px" }}>
+                    23 COFFEE
+                  </div>
+
+                  {/* Headline */}
+                  <div style={{ fontSize: "42px", fontWeight: 900, color: "#2c1a0e", lineHeight: 1.05, textAlign: "center", marginBottom: "6px" }}>
+                    Scan To<br />Stamp
+                  </div>
+
+                  {/* Subtitle */}
+                  <div style={{ fontSize: "11px", color: "#7a5c44", textAlign: "center", marginBottom: "18px", letterSpacing: "0.02em" }}>
+                    {"ស្កែន QR ដើម្បីសន្សំត្រា & ទទួលកាហ្វេឥតគិតថ្លៃ ☕"}
+                  </div>
+
+                  {/* QR box */}
+                  <div style={{ background: "#fff", borderRadius: "16px", padding: "14px 14px 10px", boxShadow: "0 4px 16px rgba(0,0,0,0.10)", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                    <div style={{ fontSize: "9px", fontWeight: 800, letterSpacing: "0.2em", color: "#c9803a", textTransform: "uppercase" }}>
+                      {"— SCAN ME —"}
+                    </div>
+                    {/* QR with centered logo overlay */}
+                    <div style={{ position: "relative", width: "200px", height: "200px", flexShrink: 0 }}>
+                      <QRCode id="qr-code-svg" value={qrScanUrl} size={200} fgColor="#1a0f00" level="H" />
+                      {/* White square pad behind logo so it blends cleanly */}
+                      <div style={{
+                        position: "absolute",
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        background: "#ffffff",
+                        padding: "1px",
+                        lineHeight: 0,
+                      }}>
+                        <img
+                          src="/23_coffee.png"
+                          alt="23 Coffee"
+                          style={{
+                            width: "64px", height: "64px", objectFit: "contain", display: "block", overflow: "hidden"
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "9px", fontWeight: 800, letterSpacing: "0.2em", color: "#c9803a", textTransform: "uppercase" }}>
+                      {"— SCAN ME —"}
+                    </div>
+                  </div>
+
+                  {/* Stamp count */}
+                  <div style={{ marginTop: "14px", textAlign: "center", fontSize: "12px", color: "#7a5c44", fontWeight: 600 }}>
+                    {"ប្រមូល "}
+                    <span style={{ color: "#c9803a", fontWeight: 900 }}>{STAMPS_PER_CYCLE} {"ត្រា"}</span>
+                    {" = ☕ ១ កែវឥតគិតថ្លៃ"}
+                  </div>
+
+                  {/* Footer */}
+                  <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid #d4c4b0", width: "100%", textAlign: "center", fontSize: "10px", color: "#a08060", letterSpacing: "0.05em" }}>
+                    23 Coffee · Loyalty Stamp Program
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Download button */}
+            <Button
+              onClick={handleDownloadQr}
+              className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold gap-2 h-11 rounded-xl shadow-lg shadow-amber-900/20 shrink-0"
+            >
+              <QrCode className="h-4 w-4" />
+              ទាញយក PNG (Print Ready)
+            </Button>
+            <p className="text-center text-zinc-600 text-[10px] -mt-2">
+              QR អចិន្ត្រៃយ៍ · ១ ត្រា / ម៉ោង / អតិថិជន
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

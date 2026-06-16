@@ -1,7 +1,14 @@
 import { db } from "@/db";
 import { user, scanHistory, systemSettings } from "@/db/schema";
 import { count, eq, gte, lte, and, desc } from "drizzle-orm";
-import { sendTelegramMessage, escapeTelegramHTML } from "@/lib/telegram";
+import {
+    sendTelegramMessage,
+    escapeTelegramHTML,
+    getTelegramUpdates,
+    answerCallbackQuery,
+    editTelegramApprovalMessage,
+    drainAllTelegramUpdates,
+} from "@/lib/telegram";
 import cron, { ScheduledTask } from 'node-cron';
 
 /**
@@ -11,6 +18,11 @@ import cron, { ScheduledTask } from 'node-cron';
 
 let morningJob: ScheduledTask | null = null;
 let nightlyJob: ScheduledTask | null = null;
+let telegramPollingJob: ScheduledTask | null = null;
+
+// Track the last Telegram update_id we've processed to avoid double-processing
+let lastTelegramUpdateId = 0;
+let telegramPollingInitialized = false;
 
 export function initCron() {
     console.log("⏱️ [Cron] Initializing dynamic scheduler...");
@@ -21,6 +33,7 @@ export async function rescheduleAllTasks() {
     // Stop existing jobs
     if (morningJob) morningJob.stop();
     if (nightlyJob) nightlyJob.stop();
+    if (telegramPollingJob) telegramPollingJob.stop();
 
     // Fetch all settings at once
     const allSettings = await db.select().from(systemSettings);
@@ -31,6 +44,12 @@ export async function rescheduleAllTasks() {
 
     morningJob = scheduleMorningTask(morningTimeStr);
     nightlyJob = scheduleNightlyTask(nightlyTimeStr);
+
+    // Telegram polling: every 5 seconds to process approve/reject callbacks
+    telegramPollingJob = cron.schedule("*/5 * * * * *", async () => {
+        await runTelegramPolling();
+    });
+    console.log("⏱️ [Cron] Telegram approval polling started (every 5s).");
 }
 
 // 1. Morning Notification (7:00 AM)
@@ -156,6 +175,123 @@ function scheduleNightlyTask(timeStr: string) {
     return cron.schedule(cronExpr, async () => {
         await runNightlyTask();
     });
+}
+
+// ── Telegram Approval Polling ─────────────────────────────────────────────
+
+/** On server start: drain all pending updates and set the offset past them. */
+async function drainOldTelegramUpdates() {
+    const maxId = await drainAllTelegramUpdates();
+    if (maxId > 0) {
+        lastTelegramUpdateId = maxId;
+        console.log(`⏭ [Telegram Poll] Drained old updates. Starting from #${maxId + 1}`);
+    }
+}
+
+async function runTelegramPolling() {
+    try {
+        // On first run: drain all pending Telegram updates so we don't
+        // reprocess stale button presses from before this server started.
+        if (!telegramPollingInitialized) {
+            telegramPollingInitialized = true;
+            await drainOldTelegramUpdates();
+            return;
+        }
+
+        const updates = await getTelegramUpdates(lastTelegramUpdateId + 1);
+        if (updates.length === 0) return;
+
+        const nowSec = Math.floor(Date.now() / 1000);
+
+        for (const update of updates) {
+            if (update.updateId > lastTelegramUpdateId) {
+                lastTelegramUpdateId = update.updateId;
+            }
+
+            // Skip callbacks older than 10 minutes — stale button presses
+            if (update.date && nowSec - update.date > 600) {
+                console.log(`⏭ [Telegram Poll] Skipping stale callback (age: ${nowSec - update.date}s)`);
+                continue;
+            }
+
+            const { callbackQueryId, data } = update;
+            const approveMatch = data.match(/^approve_(\d+)$/);
+            const rejectMatch = data.match(/^reject_(\d+)$/);
+            if (!approveMatch && !rejectMatch) continue;
+
+            const stampId = parseInt((approveMatch ?? rejectMatch)![1], 10);
+            const action = approveMatch ? "approved" : "rejected";
+
+            const stamp = await db
+                .select()
+                .from(scanHistory)
+                .where(eq(scanHistory.id, stampId))
+                .get();
+
+            if (!stamp) {
+                await answerCallbackQuery(callbackQueryId, "រកមិនឃើញត្រានេះទេ!");
+                continue;
+            }
+
+            if (stamp.status !== "pending") {
+                await answerCallbackQuery(callbackQueryId, "ត្រានេះបានដំណើរការរួចហើយ!");
+                continue;
+            }
+
+            await db
+                .update(scanHistory)
+                .set({ status: action })
+                .where(eq(scanHistory.id, stampId));
+
+            const targetUser = stamp.user_id
+                ? await db.select({ username: user.username }).from(user).where(eq(user.id, stamp.user_id)).get()
+                : null;
+
+            if (stamp.telegram_message_id && targetUser) {
+                await editTelegramApprovalMessage(
+                    stamp.telegram_message_id,
+                    targetUser.username,
+                    action === "approved",
+                    "telegram",
+                );
+            }
+
+            await answerCallbackQuery(
+                callbackQueryId,
+                action === "approved" ? "✅ បានអនុម័ត!" : "❌ បានបដិសេធ!",
+            );
+
+            if (action === "approved" && stamp.user_id) {
+                const allUserStamps = await db
+                    .select()
+                    .from(scanHistory)
+                    .where(eq(scanHistory.user_id, stamp.user_id));
+
+                const approvedCount = allUserStamps.filter(s => s.status === "approved").length;
+                const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
+                const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
+
+                const cyclesBefore = Math.floor((approvedCount - 1) / STAMPS_PER_CYCLE);
+                const cyclesAfter = Math.floor(approvedCount / STAMPS_PER_CYCLE);
+
+                try {
+                    const { broadcast } = await import("../server/routes/ws");
+                    broadcast({ type: "SCAN_UPDATED", scan: { ...stamp, status: "approved" } as any });
+
+                    if (cyclesAfter > cyclesBefore && targetUser) {
+                        broadcast({ type: "REWARD_EARNED", username: targetUser.username, totalStamps: approvedCount });
+                        await sendTelegramMessage(
+                            `🎉 <b>ជូនដំណឹង!</b>\nអតិថិជន <b>${escapeTelegramHTML(targetUser.username)}</b> បានប្រមូលត្រាគ្រប់ចំនួន ${STAMPS_PER_CYCLE}/${STAMPS_PER_CYCLE}!\n👉 <i>ការទិញបន្ទាប់របស់ពួកគេនឹងទទួលបានដោយឥតគិតថ្លៃ។</i>`,
+                        );
+                    }
+                } catch { }
+            }
+
+            console.log(`✅ [Telegram Poll] Stamp #${stampId} → ${action}`);
+        }
+    } catch (e) {
+        console.error("❌ [Telegram Polling Error]", e);
+    }
 }
 
 // Helper to convert HH:MM to cron expression (MM HH * * *)

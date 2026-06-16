@@ -4,11 +4,19 @@ import { scanHistory, user, systemSettings } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { sendTelegramMessage, escapeTelegramHTML } from "@/lib/telegram";
+import {
+    sendTelegramMessage,
+    escapeTelegramHTML,
+    sendTelegramApprovalRequest,
+    editTelegramApprovalMessage,
+} from "@/lib/telegram";
 
-// Quick in-memory cache for scan cooldown (1 per hour per user)
+// Quick in-memory cache for scan cooldown — kept for potential future use
 const scanCooldowns = new Map<number, number>();
-const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour (unused by QR claim, reserved for future)
+
+// QR token TTL: removed — QR is now permanent (no token required)
+// The /scan page is a fixed URL; auth is handled by the user's session cookie.
 
 const app = new Hono()
     .get("/", async (c) => {
@@ -214,6 +222,156 @@ const app = new Hono()
             }
 
             return c.json({ success: true, message: "Notification sent successfully." });
+        }
+    )
+
+    // ── QR Stamp Claim ─────────────────────────────────────────────────────────
+    //
+    // Customer scans QR → stamp inserted as "pending"
+    // Admin approves via dashboard OR Telegram inline button
+    // Telegram polling cron picks up callback_query and calls the approve logic
+
+    .post("/qr/claim", async (c) => {
+        const payload = c.get("jwtPayload") as { id: number; username: string; role: string } | undefined;
+
+        if (!payload?.id) {
+            return c.json({ success: false, message: "Unauthorized: Please log in first" }, 401);
+        }
+
+        if (payload.role === "admin") {
+            return c.json({ success: false, message: "Admins cannot claim stamps" }, 403);
+        }
+
+        const userId = payload.id;
+
+        // Insert as PENDING — waits for admin approval
+        const [newStamp] = await db
+            .insert(scanHistory)
+            .values({ user_id: userId, status: "pending" })
+            .returning();
+
+        // Get username for the Telegram message
+        const targetUser = await db
+            .select({ username: user.username })
+            .from(user)
+            .where(eq(user.id, userId))
+            .get();
+
+        if (targetUser) {
+            // Send Telegram approval request with inline buttons
+            const tgResult = await sendTelegramApprovalRequest(
+                newStamp.id,
+                targetUser.username,
+                newStamp.timestamp ?? new Date(),
+            );
+
+            // Save the Telegram message_id so we can edit it after approval/rejection
+            if (tgResult.success && tgResult.messageId) {
+                await db
+                    .update(scanHistory)
+                    .set({ telegram_message_id: tgResult.messageId })
+                    .where(eq(scanHistory.id, newStamp.id));
+            }
+        }
+
+        return c.json({ success: true, data: newStamp, pending: true });
+    })
+
+    // ── Approve / Reject a pending stamp ────────────────────────────────────────
+    // Used by: admin dashboard buttons AND Telegram polling cron
+    .post(
+        "/approve",
+        zValidator("json", z.object({
+            stampId: z.number(),
+            action: z.enum(["approved", "rejected"]),
+        })),
+        async (c) => {
+            const { stampId, action } = c.req.valid("json");
+            const payload = c.get("jwtPayload") as { id: number; username: string; role: string } | undefined;
+
+            if (!payload?.id) {
+                return c.json({ success: false, message: "Unauthorized" }, 401);
+            }
+
+            if (payload.role !== "admin") {
+                return c.json({ success: false, message: "Only admins can approve/reject stamps" }, 403);
+            }
+
+            const stamp = await db
+                .select()
+                .from(scanHistory)
+                .where(eq(scanHistory.id, stampId))
+                .get();
+
+            if (!stamp) {
+                return c.json({ success: false, message: "Stamp not found" }, 404);
+            }
+
+            if (stamp.status !== "pending") {
+                return c.json({ success: false, message: "Stamp is not pending" }, 400);
+            }
+
+            await db
+                .update(scanHistory)
+                .set({ status: action })
+                .where(eq(scanHistory.id, stampId));
+
+            // Edit the Telegram message to reflect the decision
+            if (stamp.telegram_message_id && stamp.user_id) {
+                const targetUser = await db
+                    .select({ username: user.username })
+                    .from(user)
+                    .where(eq(user.id, stamp.user_id))
+                    .get();
+
+                if (targetUser) {
+                    await editTelegramApprovalMessage(
+                        stamp.telegram_message_id,
+                        targetUser.username,
+                        action === "approved",
+                        "web",
+                    );
+                }
+            }
+
+            // If approved, check if it completes a cycle
+            if (action === "approved" && stamp.user_id) {
+                const allUserStamps = await db
+                    .select()
+                    .from(scanHistory)
+                    .where(eq(scanHistory.user_id, stamp.user_id));
+
+                const approvedCount = allUserStamps.filter((s) => s.status === "approved").length;
+                const redeemedCount = allUserStamps.filter((s) => s.status === "redeemed").length;
+
+                const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
+                const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
+
+                const cyclesBefore = Math.floor((approvedCount - 1) / STAMPS_PER_CYCLE);
+                const cyclesAfter = Math.floor(approvedCount / STAMPS_PER_CYCLE);
+
+                if (cyclesAfter > cyclesBefore) {
+                    const targetUser = await db
+                        .select({ username: user.username })
+                        .from(user)
+                        .where(eq(user.id, stamp.user_id))
+                        .get();
+
+                    if (targetUser) {
+                        const { broadcast } = await import("../routes/ws");
+                        broadcast({ type: "REWARD_EARNED", username: targetUser.username, totalStamps: approvedCount });
+                        await sendTelegramMessage(
+                            `🎉 <b>ជូនដំណឹង!</b>\nអតិថិជន <b>${escapeTelegramHTML(targetUser.username)}</b> បានប្រមូលត្រាគ្រប់ចំនួន ${STAMPS_PER_CYCLE}/${STAMPS_PER_CYCLE}!\n👉 <i>ការទិញបន្ទាប់របស់ពួកគេនឹងទទួលបានដោយឥតគិតថ្លៃ។</i>`,
+                        );
+                    }
+                }
+
+                // Broadcast update to dashboard
+                const { broadcast } = await import("../routes/ws");
+                broadcast({ type: "SCAN_UPDATED", scan: { ...stamp, status: "approved" } as any });
+            }
+
+            return c.json({ success: true, action });
         }
     );
 
