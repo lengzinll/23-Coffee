@@ -81,10 +81,10 @@ const app = new Hono()
 
             const approvedCount = allUserStamps.filter((s) => s.status === "approved").length;
             const redeemedCount = allUserStamps.filter((s) => s.status === "redeemed").length;
-            
+
             const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
             const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
-            
+
             const countBeforeThisStamp = approvedCount - 1;
             const cyclesBefore = Math.floor(countBeforeThisStamp / STAMPS_PER_CYCLE);
             const cyclesAfter = Math.floor(approvedCount / STAMPS_PER_CYCLE);
@@ -105,7 +105,7 @@ const app = new Hono()
                         username: targetUser.username,
                         totalStamps: approvedCount,
                     });
-                    
+
                     // Send push notification to admin via Telegram
                     await sendTelegramMessage(`🎉 <b>ជូនដំណឹង!</b>\nអតិថិជន <b>${escapeTelegramHTML(targetUser.username)}</b> បានប្រមូលត្រាគ្រប់ចំនួន ${STAMPS_PER_CYCLE}/${STAMPS_PER_CYCLE}!\n👉 <i>ការទិញបន្ទាប់របស់ពួកគេនឹងទទួលបានដោយឥតគិតថ្លៃ។</i>`);
                 }
@@ -142,7 +142,7 @@ const app = new Hono()
 
             const approvedCount = userStamps.filter((s) => s.status === "approved").length;
             const redeemedCount = userStamps.filter((s) => s.status === "redeemed").length;
-            
+
             const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
             const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
 
@@ -157,6 +157,7 @@ const app = new Hono()
                 .values({
                     user_id: userId,
                     status: "redeemed",
+                    stamps_per_cycle: STAMPS_PER_CYCLE,  // snapshot cycle size at time of redemption
                 })
                 .returning();
 
@@ -209,14 +210,14 @@ const app = new Hono()
             }
 
             if (!usernames || usernames.length === 0) {
-                 return c.json({ success: false, message: "No users to notify" }, 400);
+                return c.json({ success: false, message: "No users to notify" }, 400);
             }
 
             const userList = usernames.map((name, i) => `${i + 1}. <b>${escapeTelegramHTML(name)}</b>`).join('\n');
             const telegramMessage = `🎉 <b>ជូនដំណឹង! មានអតិថិជន ${usernames.length}នាក់ ដែលរួចរាល់សម្រាប់ការទទួលរង្វាន់៖</b>\n\n${userList}\n\n👉 <i>ការទិញបន្ទាប់របស់ពួកគេនឹងទទួលបានដោយឥតគិតថ្លៃ។</i>`;
 
             const pushResult = await sendTelegramMessage(telegramMessage);
-            
+
             if (!pushResult?.success) {
                 return c.json({ success: false, message: `Telegram Error: ${pushResult?.error || "Unknown"}` }, 500);
             }
