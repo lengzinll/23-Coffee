@@ -8,6 +8,4 @@ services:
     restart: always
     environment:
       - JWT_SECRET=lengzin23coffee2026
-      - DATABASE_URL=file:/app/db.sqlite
-    volumes:
-      - ~/Desktop/db_management/db.sqlite:/app/db.sqlite
+      - DATABASE_URL=file:/app/23coffee.sqlite

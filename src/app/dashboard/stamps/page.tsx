@@ -516,7 +516,9 @@ const defaultStamp = 6;
 
 export default function StampsPage() {
   const { data: currentUser } = useSWR("/api/auth/me", meFetcher);
-  const { data, isLoading, error, mutate } = useSWR("/api/scan", fetcher);
+  const { data, isLoading, error, mutate } = useSWR("/api/scan", fetcher, {
+    refreshInterval: 5000,
+  });
   const {
     data: usersData,
     isLoading: isUsersLoading,
@@ -565,31 +567,16 @@ export default function StampsPage() {
     totalStamps: number;
   } | null>(null);
 
-  // WebSocket: admin listens for REWARD_EARNED events
-  useEffect(() => {
-    if (currentUser?.role !== "admin") return;
+  // Poll for updates every 5 seconds to simulate real-time (since WebSockets don't work with Vercel Edge Runtime)
+  // useEffect(() => {
+  //   if (!currentUser) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${protocol}://${window.location.host}/api/ws`);
+  //   const intervalId = setInterval(() => {
+  //     mutate(); // Refresh the stamps list every 5 seconds
+  //   }, 5000);
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "REWARD_EARNED") {
-          setRewardAlert({
-            username: msg.username,
-            totalStamps: msg.totalStamps,
-          });
-          mutate();
-        }
-        if (msg.type === "SCAN_UPDATED") {
-          mutate(); // refresh stamps list when Telegram approves/rejects
-        }
-      } catch { }
-    };
-
-    return () => ws.close();
-  }, [currentUser?.role, mutate]);
+  //   return () => clearInterval(intervalId);
+  // }, [currentUser, mutate]);
 
   // ── QR Code ─────────────────────────────────────────────────────────────────
   const handleGenerateQr = useCallback(async () => {

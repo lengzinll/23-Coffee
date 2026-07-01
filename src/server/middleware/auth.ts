@@ -17,6 +17,7 @@ const publicPaths: PublicPath[] = [
   { path: "/api/register/count", method: "GET", exact: true },
   { path: "/api/event/active", method: "GET", exact: true },
   { path: "/api/event/active/tasks", method: "GET", exact: true },
+  { path: "/api/ws", method: "GET", exact: true },
 ];
 
 export const authMiddleware = createMiddleware(async (c, next) => {

@@ -198,13 +198,6 @@ const app = new Hono()
                     .get();
 
                 if (targetUser) {
-                    const { broadcast } = await import("../routes/ws");
-                    broadcast({
-                        type: "REWARD_EARNED",
-                        username: targetUser.username,
-                        totalStamps: approvedCount,
-                    });
-
                     // Send push notification to admin via Telegram
                     await sendTelegramMessage(`🎉 <b>ជូនដំណឹង!</b>\nអតិថិជន <b>${escapeTelegramHTML(targetUser.username)}</b> បានប្រមូលត្រាគ្រប់ចំនួន ${STAMPS_PER_CYCLE}/${STAMPS_PER_CYCLE}!\n👉 <i>ការទិញបន្ទាប់របស់ពួកគេនឹងទទួលបានដោយឥតគិតថ្លៃ។</i>`);
                 }
@@ -312,7 +305,7 @@ const app = new Hono()
                 );
 
                 if (isPartOfRedeemedCycle) {
-                    return c.json({ success: false, message: "Cannot delete stamp that's part of a redeemed" }, 400);
+                    return c.json({ success: false, message: "Cannot delete stamp that's part of a redeemed cycle" }, 400);
                 }
             }
 
@@ -502,17 +495,11 @@ const app = new Hono()
                         .get();
 
                     if (targetUser) {
-                        const { broadcast } = await import("../routes/ws");
-                        broadcast({ type: "REWARD_EARNED", username: targetUser.username, totalStamps: approvedCount });
                         await sendTelegramMessage(
                             `🎉 <b>ជូនដំណឹង!</b>\nអតិថិជន <b>${escapeTelegramHTML(targetUser.username)}</b> បានប្រមូលត្រាគ្រប់ចំនួន ${STAMPS_PER_CYCLE}/${STAMPS_PER_CYCLE}!\n👉 <i>ការទិញបន្ទាប់របស់ពួកគេនឹងទទួលបានដោយឥតគិតថ្លៃ។</i>`,
                         );
                     }
                 }
-
-                // Broadcast update to dashboard
-                const { broadcast } = await import("../routes/ws");
-                broadcast({ type: "SCAN_UPDATED", scan: { ...stamp, status: "approved" } as any });
             }
 
             return c.json({ success: true, action });

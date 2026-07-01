@@ -6,7 +6,6 @@ const app = new Hono({ strict: false }).basePath("/api");
 import authApp from "./routes/auth";
 import userApp from "./routes/user";
 import scanApp from "./routes/scan";
-import wsApp from "./routes/ws";
 import statsApp from "./routes/stats";
 import settingsApp from "./routes/settings";
 import { authMiddleware } from "./middleware/auth";
@@ -20,7 +19,6 @@ const routes = app
   .route("/auth", authApp)
   .route("/user", userApp)
   .route("/scan", scanApp)
-  .route("/ws", wsApp)
   .route("/stats", statsApp)
   .route("/settings", settingsApp);
 
