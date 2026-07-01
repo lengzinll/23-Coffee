@@ -275,11 +275,7 @@ async function runTelegramPolling() {
                 const cyclesAfter = Math.floor(approvedCount / STAMPS_PER_CYCLE);
 
                 try {
-                    const { broadcast } = await import("../server/routes/ws");
-                    broadcast({ type: "SCAN_UPDATED", scan: { ...stamp, status: "approved" } as any });
-
                     if (cyclesAfter > cyclesBefore && targetUser) {
-                        broadcast({ type: "REWARD_EARNED", username: targetUser.username, totalStamps: approvedCount });
                         await sendTelegramMessage(
                             `🎉 <b>ជូនដំណឹង!</b>\nអតិថិជន <b>${escapeTelegramHTML(targetUser.username)}</b> បានប្រមូលត្រាគ្រប់ចំនួន ${STAMPS_PER_CYCLE}/${STAMPS_PER_CYCLE}!\n👉 <i>ការទិញបន្ទាប់របស់ពួកគេនឹងទទួលបានដោយឥតគិតថ្លៃ។</i>`,
                         );
