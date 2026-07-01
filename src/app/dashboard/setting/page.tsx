@@ -17,7 +17,8 @@ import {
   Check,
   Zap,
   Info,
-  Clock
+  Clock,
+  Database
 } from "lucide-react";
 
 /**
@@ -39,6 +40,7 @@ export default function SettingsPage() {
   const [chatId, setChatId] = useState("");
   const [morningTime, setMorningTime] = useState("");
   const [reportTime, setReportTime] = useState("");
+  const [backupTime, setBackupTime] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
 
@@ -49,6 +51,7 @@ export default function SettingsPage() {
       setChatId(settings["TELEGRAM_CHAT_ID"] || "");
       setMorningTime(settings["NOTIFICATION_TIME"] || "07:00");
       setReportTime(settings["REPORT_TIME"] || "21:00");
+      setBackupTime(settings["BACKUP_TIME"] || "02:00");
     }
   }, [settings]);
 
@@ -61,6 +64,7 @@ export default function SettingsPage() {
         { key: "TELEGRAM_CHAT_ID", value: chatId },
         { key: "NOTIFICATION_TIME", value: morningTime },
         { key: "REPORT_TIME", value: reportTime },
+        { key: "BACKUP_TIME", value: backupTime },
       ];
 
       for (const update of updates) {
@@ -144,7 +148,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Time Schedulers with brighter labels */}
-              <div className="grid sm:grid-cols-2 gap-8 pt-4 border-t border-zinc-800/50">
+              <div className="grid sm:grid-cols-3 gap-6 pt-4 border-t border-zinc-800/50">
                 <div className="space-y-3">
                   <Label className="text-zinc-400 text-sm uppercase font-bold tracking-widest flex items-center gap-2">
                     <Clock className="w-3 h-3 text-zinc-500" />
@@ -166,6 +170,18 @@ export default function SettingsPage() {
                     type="time"
                     value={reportTime}
                     onChange={(e) => setReportTime(e.target.value)}
+                    className="h-11 bg-zinc-950 border-zinc-800 focus:ring-primary/20 text-zinc-100"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label className="text-zinc-400 text-sm uppercase font-bold tracking-widest flex items-center gap-2">
+                    <Database className="w-3 h-3 text-zinc-500" />
+                    ម៉ោងបម្រុងទុកទិន្នន័យ
+                  </Label>
+                  <Input
+                    type="time"
+                    value={backupTime}
+                    onChange={(e) => setBackupTime(e.target.value)}
                     className="h-11 bg-zinc-950 border-zinc-800 focus:ring-primary/20 text-zinc-100"
                   />
                 </div>

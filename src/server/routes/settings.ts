@@ -24,6 +24,7 @@ const settingsApp = new Hono({ strict: false })
       STAMPS_PER_CYCLE: process.env.STAMPS_PER_CYCLE || "6",
       NOTIFICATION_TIME: process.env.NOTIFICATION_TIME || "07:00",
       REPORT_TIME: process.env.REPORT_TIME || "21:00",
+      BACKUP_TIME: process.env.BACKUP_TIME || "02:00",
       TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || "",
       TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID || "",
     };

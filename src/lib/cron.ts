@@ -10,6 +10,10 @@ import {
     drainAllTelegramUpdates,
 } from "@/lib/telegram";
 import cron, { ScheduledTask } from 'node-cron';
+import { put, list, del } from "@vercel/blob";
+import { sql } from "drizzle-orm";
+import { promises as fs } from "fs";
+import path from "path";
 
 /**
  * Dynamic Cron System
@@ -18,6 +22,7 @@ import cron, { ScheduledTask } from 'node-cron';
 
 let morningJob: ScheduledTask | null = null;
 let nightlyJob: ScheduledTask | null = null;
+let backupJob: ScheduledTask | null = null;
 let telegramPollingJob: ScheduledTask | null = null;
 
 // Track the last Telegram update_id we've processed to avoid double-processing
@@ -33,6 +38,7 @@ export async function rescheduleAllTasks() {
     // Stop existing jobs
     if (morningJob) morningJob.stop();
     if (nightlyJob) nightlyJob.stop();
+    if (backupJob) backupJob.stop();
     if (telegramPollingJob) telegramPollingJob.stop();
 
     // Fetch all settings at once
@@ -41,9 +47,11 @@ export async function rescheduleAllTasks() {
 
     const morningTimeStr = settingsMap.get("NOTIFICATION_TIME") || process.env.NOTIFICATION_TIME || "07:00";
     const nightlyTimeStr = settingsMap.get("REPORT_TIME") || process.env.REPORT_TIME || "21:00";
+    const backupTimeStr = settingsMap.get("BACKUP_TIME") || process.env.BACKUP_TIME || "02:00";
 
     morningJob = scheduleMorningTask(morningTimeStr);
     nightlyJob = scheduleNightlyTask(nightlyTimeStr);
+    backupJob = scheduleBackupTask(backupTimeStr);
 
     // Telegram polling: every 5 seconds to process approve/reject callbacks
     telegramPollingJob = cron.schedule("*/5 * * * * *", async () => {
@@ -308,4 +316,67 @@ function calculateMsUntil(targetHour: number, targetMinute: number) {
     }
 
     return target.getTime() - now.getTime();
+}
+
+
+// 3. Database Backup
+export async function backupDbToVercelBlob() {
+    console.log("🕒 Starting SQLite backup...");
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const tempBackup = path.join(
+        path.dirname("./23coffee.sqlite"),
+        `backup-${timestamp}.sqlite`
+    );
+
+    try {
+        // Create a consistent snapshot
+        await db.run(sql.raw(`VACUUM INTO '${tempBackup}'`));
+
+        // Read backup file
+        const file = await fs.readFile(tempBackup);
+
+        // Upload
+        await put(`backup-${timestamp}.sqlite`, file, {
+            access: "private",
+            addRandomSuffix: false,
+        });
+
+        console.log("✅ Backup uploaded to vercel blob.");
+
+        // Now clean up old backups: keep last 5
+        console.log("🧹 [Cron] Cleaning up old backups...");
+        const blobs = await list();
+        const backupBlobs = blobs.blobs.filter(b => 
+            b.pathname.startsWith('backup-') && b.pathname.endsWith('.sqlite')
+        );
+
+        // Sort by uploadedAt (newest first)
+        backupBlobs.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+
+        // Keep first 5, delete rest
+        const toDelete = backupBlobs.slice(5);
+        for (const b of toDelete) {
+            await del(b.url);
+            console.log(`🗑️ [Cron] Deleted old backup: ${b.pathname}`);
+        }
+
+        console.log(`✅ [Cron] Cleanup done! Kept ${backupBlobs.length - toDelete.length} backups.`);
+
+    } finally {
+        // Cleanup temp file
+        try {
+            await fs.unlink(tempBackup);
+        } catch {}
+    }
+}
+
+function scheduleBackupTask(timeStr: string) {
+    const cronExpr = timeToCron(timeStr);
+    const [targetHour, targetMinute] = timeStr.split(":").map(Number);
+    const msUntilTarget = calculateMsUntil(targetHour, targetMinute);
+    console.log(`⏱️ [Cron] Database backup scheduled at ${timeStr} (${cronExpr}). Next run in ${Math.round(msUntilTarget / 60000)} minutes.`);
+    return cron.schedule(cronExpr, async () => {
+        await backupDbToVercelBlob();
+    });
 }

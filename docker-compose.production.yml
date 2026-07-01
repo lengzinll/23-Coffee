@@ -6,5 +6,6 @@ services:
     environment:
       - JWT_SECRET=lengzin23coffee2026
       - DATABASE_URL=file:/app/23coffee.sqlite
+      - BLOB_READ_WRITE_TOKEN="vercel_blob_rw_IKP1GLkWB26yUsBU_FoLOKX43Zhha2zbT7UoVHIzzwYxc0e"
     volumes:
       - ~/Desktop/db_management/23coffee.sqlite:/app/23coffee.sqlite

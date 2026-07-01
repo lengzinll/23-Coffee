@@ -1,11 +1,10 @@
 services:
-  web:
+  23coffee:
     build:
       context: .
     image: lengzin/23coffee:latest
     ports:
       - "3000:3000"
     restart: always
-    environment:
-      - JWT_SECRET=lengzin23coffee2026
-      - DATABASE_URL=file:/app/23coffee.sqlite
+    env_file:
+      - .env
