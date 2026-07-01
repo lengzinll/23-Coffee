@@ -36,7 +36,7 @@ export default async function Home() {
       <MouseGlow />
       <div className="relative z-10 w-full max-w-4xl space-y-8 text-center">
         <div className="space-y-6 flex flex-col items-center">
-          <div className="relative mb-2 w-[340px] h-[180px] sm:w-[500px] sm:h-[250px] animate-in fade-in zoom-in duration-1000">
+          <div className="relative mb-2 w-85 h-45 sm:w-125 sm:h-62.5 animate-in fade-in zoom-in duration-1000">
             <Image
               src="/23_coffee.png"
               alt="Next Play Live"

@@ -4,12 +4,106 @@ import { scanHistory, user, systemSettings } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { type Scan } from "@/lib/types";
 import {
-    sendTelegramMessage,
-    escapeTelegramHTML,
-    sendTelegramApprovalRequest,
-    editTelegramApprovalMessage,
+  sendTelegramMessage,
+  escapeTelegramHTML,
+  sendTelegramApprovalRequest,
+  editTelegramApprovalMessage,
 } from "@/lib/telegram";
+
+// ── Build cycles logic (server-side version) ────────────────────────────────
+type StampCycle = {
+  cycleIndex: number;
+  stamps: Scan[];
+  cycleSize: number;
+  isComplete: boolean;
+  isRedeemed: boolean;
+  isPendingRedemption: boolean;
+  redeemedRecord: Scan | null;
+};
+
+function buildCycles(allStamps: Scan[], currentStampsPerCycle: number): StampCycle[] {
+  // Approved stamps in chronological order (oldest first)
+  const approved = allStamps
+    .filter((s) => s.status === "approved")
+    .sort((a, b) => {
+      const ta = a.timestamp ? a.timestamp.getTime() : 0;
+      const tb = b.timestamp ? b.timestamp.getTime() : 0;
+      return ta - tb;
+    });
+
+  // Redeemed records in chronological order (oldest first)
+  const redeemed = allStamps
+    .filter((s) => s.status === "redeemed")
+    .sort((a, b) => {
+      const ta = a.timestamp ? a.timestamp.getTime() : 0;
+      const tb = b.timestamp ? b.timestamp.getTime() : 0;
+      return ta - tb;
+    });
+
+  // Pending stamps (for display in the current in-progress cycle)
+  const pending = allStamps
+    .filter((s) => s.status === "pending")
+    .sort((a, b) => {
+      const ta = a.timestamp ? a.timestamp.getTime() : 0;
+      const tb = b.timestamp ? b.timestamp.getTime() : 0;
+      return ta - tb;
+    });
+
+  const cycles: StampCycle[] = [];
+  let approvedCursor = 0;
+
+  // Past (redeemed) cycles — each uses its own recorded size
+  redeemed.forEach((redeemedRecord, idx) => {
+    const cycleSize = redeemedRecord.stamps_per_cycle ?? currentStampsPerCycle;
+    const cycleStamps = approved.slice(approvedCursor, approvedCursor + cycleSize);
+    approvedCursor += cycleSize;
+
+    cycles.push({
+      cycleIndex: idx,
+      stamps: cycleStamps,
+      cycleSize,
+      isComplete: true,
+      isRedeemed: true,
+      isPendingRedemption: false,
+      redeemedRecord,
+    });
+  });
+
+  // Remaining approved stamps → may form complete (unclaimed) cycles
+  const remaining = approved.slice(approvedCursor);
+  let remainingCursor = 0;
+
+  while (remainingCursor + currentStampsPerCycle <= remaining.length) {
+    const cycleStamps = remaining.slice(remainingCursor, remainingCursor + currentStampsPerCycle);
+    remainingCursor += currentStampsPerCycle;
+    cycles.push({
+      cycleIndex: cycles.length,
+      stamps: cycleStamps,
+      cycleSize: currentStampsPerCycle,
+      isComplete: true,
+      isRedeemed: false,
+      isPendingRedemption: true,
+      redeemedRecord: null,
+    });
+  }
+
+  // Current in-progress cycle (partial approved + pending)
+  const inProgressApproved = remaining.slice(remainingCursor);
+  const inProgressStamps = [...inProgressApproved, ...pending];
+  cycles.push({
+    cycleIndex: cycles.length,
+    stamps: inProgressStamps,
+    cycleSize: currentStampsPerCycle,
+    isComplete: false,
+    isRedeemed: false,
+    isPendingRedemption: false,
+    redeemedRecord: null,
+  });
+
+  return cycles;
+}
 
 // Quick in-memory cache for scan cooldown — kept for potential future use
 const scanCooldowns = new Map<number, number>();
@@ -65,11 +159,23 @@ const app = new Hono()
                 return c.json({ success: false, message: "Unauthorized: Only admins can manually add stamps" }, 403);
             }
 
+            const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
+            const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
+
+            // First get stamps BEFORE inserting to calculate cycles before
+            const stampsBefore = await db
+                .select()
+                .from(scanHistory)
+                .where(eq(scanHistory.user_id, userId));
+
+            const cyclesBefore = buildCycles(stampsBefore, STAMPS_PER_CYCLE).filter((c) => c.isComplete).length;
+
             const [newStamp] = await db
                 .insert(scanHistory)
                 .values({
                     user_id: userId,
                     status: "approved",
+                    stamps_per_cycle: STAMPS_PER_CYCLE,
                 })
                 .returning();
 
@@ -80,14 +186,7 @@ const app = new Hono()
                 .where(eq(scanHistory.user_id, userId));
 
             const approvedCount = allUserStamps.filter((s) => s.status === "approved").length;
-            const redeemedCount = allUserStamps.filter((s) => s.status === "redeemed").length;
-
-            const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
-            const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
-
-            const countBeforeThisStamp = approvedCount - 1;
-            const cyclesBefore = Math.floor(countBeforeThisStamp / STAMPS_PER_CYCLE);
-            const cyclesAfter = Math.floor(approvedCount / STAMPS_PER_CYCLE);
+            const cyclesAfter = buildCycles(allUserStamps, STAMPS_PER_CYCLE).filter((c) => c.isComplete).length;
 
             // Only alert when an EXACT cycle is completed (e.g. 5->6, 11->12)
             if (cyclesAfter > cyclesBefore) {
@@ -140,15 +239,14 @@ const app = new Hono()
                 .from(scanHistory)
                 .where(eq(scanHistory.user_id, userId));
 
-            const approvedCount = userStamps.filter((s) => s.status === "approved").length;
-            const redeemedCount = userStamps.filter((s) => s.status === "redeemed").length;
-
             const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
             const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
 
-            // Check if there is an unredeemed completed cycle
-            const completedCycles = Math.floor(approvedCount / STAMPS_PER_CYCLE);
-            if (completedCycles <= redeemedCount) {
+            // Build cycles to check for unredeemed reward
+            const cycles = buildCycles(userStamps, STAMPS_PER_CYCLE);
+            const hasUnredeemed = cycles.some((cycle) => cycle.isPendingRedemption);
+
+            if (!hasUnredeemed) {
                 return c.json({ success: false, message: "No unredeemed reward available for this user" }, 400);
             }
 
@@ -184,6 +282,41 @@ const app = new Hono()
                 return c.json({ success: false, message: "Unauthorized: Only admins can delete stamps" }, 403);
             }
 
+            const stamp = await db
+                .select()
+                .from(scanHistory)
+                .where(eq(scanHistory.id, parseInt(id, 10)))
+                .get();
+
+            if (!stamp) {
+                return c.json({ success: false, message: "Stamp not found" }, 404);
+            }
+
+            // If stamp is approved, check if it's part of a REDEEMED cycle!
+            if (stamp.status === "approved" && stamp.user_id) {
+                const userStamps = await db
+                    .select()
+                    .from(scanHistory)
+                    .where(eq(scanHistory.user_id, stamp.user_id));
+
+                const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
+                const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
+
+                const cycles = buildCycles(userStamps, STAMPS_PER_CYCLE);
+
+                // Check if stamp is part of any REDEEMED cycle
+                const isPartOfRedeemedCycle = cycles.some(
+                    (cycle) =>
+                        cycle.isRedeemed &&
+                        cycle.stamps.some((cycleStamp) => cycleStamp.id === stamp.id)
+                );
+
+                if (isPartOfRedeemedCycle) {
+                    return c.json({ success: false, message: "Cannot delete stamp that's part of a redeemed" }, 400);
+                }
+            }
+
+            // Okay, delete it!
             await db.delete(scanHistory).where(eq(scanHistory.id, parseInt(id, 10)));
 
             return c.json({ success: true, message: "Stamp deleted successfully" });
@@ -245,10 +378,13 @@ const app = new Hono()
 
         const userId = payload.id;
 
+        const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
+        const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
+
         // Insert as PENDING — waits for admin approval
         const [newStamp] = await db
             .insert(scanHistory)
-            .values({ user_id: userId, status: "pending" })
+            .values({ user_id: userId, status: "pending", stamps_per_cycle: STAMPS_PER_CYCLE })
             .returning();
 
         // Get username for the Telegram message
@@ -312,9 +448,22 @@ const app = new Hono()
                 return c.json({ success: false, message: "Stamp is not pending" }, 400);
             }
 
+            const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
+            const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
+
+            // First get stamps BEFORE updating if we need to check cycles
+            let cyclesBefore: number = 0;
+            if (action === "approved" && stamp.user_id) {
+                const stampsBefore = await db
+                    .select()
+                    .from(scanHistory)
+                    .where(eq(scanHistory.user_id, stamp.user_id));
+                cyclesBefore = buildCycles(stampsBefore, STAMPS_PER_CYCLE).filter((c) => c.isComplete).length;
+            }
+
             await db
                 .update(scanHistory)
-                .set({ status: action })
+                .set({ status: action, stamps_per_cycle: STAMPS_PER_CYCLE })
                 .where(eq(scanHistory.id, stampId));
 
             // Edit the Telegram message to reflect the decision
@@ -343,13 +492,7 @@ const app = new Hono()
                     .where(eq(scanHistory.user_id, stamp.user_id));
 
                 const approvedCount = allUserStamps.filter((s) => s.status === "approved").length;
-                const redeemedCount = allUserStamps.filter((s) => s.status === "redeemed").length;
-
-                const settingsRes = await db.select().from(systemSettings).where(eq(systemSettings.key, "STAMPS_PER_CYCLE")).get();
-                const STAMPS_PER_CYCLE = settingsRes?.value ? parseInt(settingsRes.value, 10) : 6;
-
-                const cyclesBefore = Math.floor((approvedCount - 1) / STAMPS_PER_CYCLE);
-                const cyclesAfter = Math.floor(approvedCount / STAMPS_PER_CYCLE);
+                const cyclesAfter = buildCycles(allUserStamps, STAMPS_PER_CYCLE).filter((c) => c.isComplete).length;
 
                 if (cyclesAfter > cyclesBefore) {
                     const targetUser = await db

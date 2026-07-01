@@ -230,6 +230,7 @@ export default function DashboardOverview() {
                             activity.status === "approved" && "bg-emerald-500/20 text-emerald-500 border-emerald-500/30",
                             activity.status === "pending" && "bg-yellow-500/20 text-yellow-500 border-yellow-500/30",
                             activity.status === "rejected" && "bg-red-500/20 text-red-500 border-red-500/30",
+                            activity.status === "redeemed" && "bg-pink-500/20 text-pink-500 border-pink-500/30",
                           )}
                           variant="outline"
                         >
@@ -255,7 +256,7 @@ export default function DashboardOverview() {
             អតិថិជន ៥ នាក់ដែលជិតទទួលបានរង្វាន់
           </h2>
           <Card className="bg-zinc-900 border-zinc-800 shadow-sm">
-            <CardContent className="p-0 max-h-[400px] overflow-y-auto">
+            <CardContent className="p-0 max-h-100 overflow-y-auto">
               {topCustomers?.length > 0 ? (
                 <div className="divide-y divide-zinc-800">
                   {topCustomers.map((customer: any, index: number) => (

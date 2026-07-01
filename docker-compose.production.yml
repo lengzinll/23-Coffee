@@ -1,0 +1,10 @@
+services:
+  23coffee:
+    image: lengzin/23coffee:latest
+    ports:
+      - "3000"
+    environment:
+      - JWT_SECRET=lengzin23coffee2026
+      - DATABASE_URL=file:/app/23coffee.sqlite
+    volumes:
+      - ~/Desktop/db_management/23coffee.sqlite:/app/23coffee.sqlite
